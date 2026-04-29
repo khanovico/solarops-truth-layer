@@ -18,11 +18,14 @@ import { ProjectDetail as ProjectDetailRoute } from "../routes/ProjectDetail";
 
 const portfolio: PortfolioHealth = {
   total_projects: 3,
-  open_blockers: 3,
+  blocked_projects: 3,
+  green: 1,
+  yellow: 1,
+  red: 1,
+  unknown: 0,
   estimated_annual_savings_usd: 1320000,
   estimated_rebates_usd: 515000,
   projects_ready_for_financing_review: 1,
-  red_projects: 1,
   high_severity_blockers: 2,
   missing_financing_evidence: 2,
   stale_or_conflicting_projects: 1,
@@ -93,7 +96,7 @@ const answer: AiAnswer = {
 const projectDetail: ProjectDetail = {
   ...projects[0],
   financing_type: "PPA",
-  ppa_term_months: 180,
+  ppa_term_years: 15,
   financing_readiness_status: "needs_evidence",
   project_cost_usd: 2200000,
   milestones: [],
@@ -141,7 +144,7 @@ test("renders_dashboard_kpis", async () => {
   renderWithApi(<Dashboard />);
 
   const totalProjectsCard = (await screen.findByText("Total projects")).closest("section");
-  const blockersCard = screen.getAllByText("Open blockers")[0].closest("section");
+  const blockersCard = screen.getAllByText("Blocked projects")[0].closest("section");
   const savingsCard = screen.getByText("Estimated annual savings").closest("section");
   const rebatesCard = screen.getByText("Estimated rebates").closest("section");
 

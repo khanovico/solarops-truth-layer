@@ -117,7 +117,7 @@ const alphaProject: ProjectDetail = {
   estimated_annual_savings_usd: 420000,
   estimated_rebate_usd: 180000,
   financing_type: "PPA",
-  ppa_term_months: 180,
+  ppa_term_years: 15,
   financing_readiness_status: "needs_evidence",
   project_cost_usd: 2200000,
   milestones: [
@@ -205,7 +205,7 @@ const bravoProject: ProjectDetail = {
   estimated_annual_savings_usd: 310000,
   estimated_rebate_usd: 95000,
   financing_type: "Loan",
-  ppa_term_months: null,
+  ppa_term_years: null,
   financing_readiness_status: "ready",
   project_cost_usd: 1480000,
   milestones: [
@@ -257,7 +257,7 @@ const charlieProject: ProjectDetail = {
   estimated_annual_savings_usd: 590000,
   estimated_rebate_usd: 240000,
   financing_type: "Lease",
-  ppa_term_months: null,
+  ppa_term_years: null,
   financing_readiness_status: "blocked",
   project_cost_usd: 2700000,
   milestones: [
@@ -334,8 +334,18 @@ function toSummary(project: ProjectDetail): ProjectSummary {
 function computePortfolioHealth(projects: ProjectDetail[]): PortfolioHealth {
   return {
     total_projects: projects.length,
-    open_blockers: projects.reduce(
-      (sum, project) => sum + project.blockers.filter((blocker) => blocker.is_open).length,
+    blocked_projects: projects.filter((project) =>
+      project.blockers.some((blocker) => blocker.is_open),
+    ).length,
+    green: projects.filter((project) => project.health === "green").length,
+    yellow: projects.filter((project) => project.health === "yellow").length,
+    red: projects.filter((project) => project.health === "red").length,
+    unknown: projects.filter((project) => project.health === "unknown").length,
+    high_severity_blockers: projects.reduce(
+      (sum, project) =>
+        sum +
+        project.blockers.filter((blocker) => blocker.is_open && blocker.severity === "high")
+          .length,
       0,
     ),
     estimated_annual_savings_usd: projects.reduce(
@@ -349,14 +359,6 @@ function computePortfolioHealth(projects: ProjectDetail[]): PortfolioHealth {
     projects_ready_for_financing_review: projects.filter(
       (project) => project.financing_readiness_status === "ready",
     ).length,
-    red_projects: projects.filter((project) => project.health === "red").length,
-    high_severity_blockers: projects.reduce(
-      (sum, project) =>
-        sum +
-        project.blockers.filter((blocker) => blocker.is_open && blocker.severity === "high")
-          .length,
-      0,
-    ),
     missing_financing_evidence: projects.filter((project) =>
       project.claims.some((claim) => claim.status === "missing_evidence"),
     ).length,

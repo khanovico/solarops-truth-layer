@@ -38,11 +38,14 @@ export type ProjectSummary = {
 
 export type PortfolioHealth = {
   total_projects: number;
-  open_blockers: number;
+  blocked_projects: number;
+  green: number;
+  yellow: number;
+  red: number;
+  unknown: number;
   estimated_annual_savings_usd: number;
   estimated_rebates_usd: number;
   projects_ready_for_financing_review: number;
-  red_projects: number;
   high_severity_blockers: number;
   missing_financing_evidence: number;
   stale_or_conflicting_projects: number;
@@ -54,17 +57,26 @@ export type FinancingReadinessStatus =
   | "needs_evidence"
   | "unknown";
 
-export type MilestoneStatus = "planned" | "in_progress" | "done" | "blocked";
+export type MilestoneStatus =
+  | "planned"
+  | "not_started"
+  | "in_progress"
+  | "done"
+  | "complete"
+  | "blocked"
+  | "cancelled";
 
 export type BlockerSeverity = "low" | "medium" | "high";
 
 export type Blocker = {
   id: string;
   category: string;
+  title?: string;
   severity: BlockerSeverity;
-  owner_name: string;
+  owner_name: string | null;
   description: string;
   is_open: boolean;
+  status?: string;
 };
 
 export type Evidence = {
@@ -73,7 +85,7 @@ export type Evidence = {
   title: string;
   summary: string;
   effective_date: string | null;
-  source_uri: string;
+  source_uri: string | null;
 };
 
 export type Asset = {
@@ -134,7 +146,7 @@ export type AiAnswer = {
 
 export type ProjectDetail = ProjectSummary & {
   financing_type: string | null;
-  ppa_term_months: number | null;
+  ppa_term_years: number | null;
   financing_readiness_status: FinancingReadinessStatus;
   project_cost_usd: number | null;
   milestones: Milestone[];

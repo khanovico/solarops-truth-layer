@@ -137,7 +137,7 @@ export function Dashboard() {
 
       <section className="metrics-grid">
         <ProjectHealthCard label="Total projects" value={portfolio.total_projects} tone="neutral" />
-        <ProjectHealthCard label="Open blockers" value={portfolio.open_blockers} tone="red" />
+        <ProjectHealthCard label="Blocked projects" value={portfolio.blocked_projects} tone="red" />
         <ProjectHealthCard
           label="Estimated annual savings"
           value={formatCurrency(portfolio.estimated_annual_savings_usd)}
@@ -271,7 +271,7 @@ export function Dashboard() {
         <div className="risk-grid">
           <div className="list-card">
             <strong>Red projects</strong>
-            <span>{portfolio.red_projects}</span>
+            <span>{portfolio.red}</span>
           </div>
           <div className="list-card">
             <strong>High-severity blockers</strong>

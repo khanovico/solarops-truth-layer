@@ -155,7 +155,7 @@ export function ProjectDetail() {
           <span className="metric-label">Financing</span>
           <strong className="metric-value">{project.financing_type ?? "Unknown"}</strong>
           <span className="metric-subtext">
-            {project.ppa_term_months ? `${project.ppa_term_months} month term` : "No PPA term"}
+            {project.ppa_term_years ? `${project.ppa_term_years} year term` : "No PPA term"}
           </span>
         </article>
       </section>
