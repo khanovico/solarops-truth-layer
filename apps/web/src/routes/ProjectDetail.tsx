@@ -12,8 +12,21 @@ import { formatCurrency, formatDate } from "../lib/format";
 import { useApi } from "../lib/api-context";
 import type { AiAnswer, ProjectDetail as ProjectDetailType } from "../lib/types";
 
+const ASSISTANT_THINKING_DELAY_MS = 650;
+const ASSISTANT_PROMPTS = [
+  "Is this project ready for financing review?",
+  "What is blocking this project?",
+  "Can this project move to rebate submission?",
+];
+
 function projectHealthBadge(health: ProjectDetailType["health"]) {
   return <span className={`badge badge-${health === "unknown" ? "neutral" : health}`}>{health}</span>;
+}
+
+function wait(milliseconds: number) {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, milliseconds);
+  });
 }
 
 export function ProjectDetail() {
@@ -21,11 +34,13 @@ export function ProjectDetail() {
   const { id = "" } = useParams();
   const [project, setProject] = useState<ProjectDetailType | null>(null);
   const [answer, setAnswer] = useState<AiAnswer | null>(null);
+  const [assistantError, setAssistantError] = useState<string | null>(null);
   const [warning, setWarning] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [pendingAction, setPendingAction] = useState<string | null>(null);
   const [question, setQuestion] = useState("Is this project ready for financing review?");
+  const [submittedQuestion, setSubmittedQuestion] = useState<string | null>(null);
 
   async function refreshProject() {
     const result = await api.getProject(id);
@@ -66,9 +81,20 @@ export function ProjectDetail() {
   }, [api, id]);
 
   async function handleAsk() {
+    const askedQuestion = question.trim();
+    if (!askedQuestion) {
+      return;
+    }
+
     setPendingAction("ask");
+    setAnswer(null);
+    setSubmittedQuestion(askedQuestion);
+    setAssistantError(null);
     try {
-      const result = await api.askProjectAi(id, question);
+      const result = await api.askProjectAi(id, askedQuestion);
+      if (result.warning) {
+        await wait(ASSISTANT_THINKING_DELAY_MS);
+      }
       const linkedEvidenceIds = new Set(
         result.data.claims.flatMap((claim) => claim.evidence_ids),
       );
@@ -80,7 +106,7 @@ export function ProjectDetail() {
         setWarning(result.warning);
       }
     } catch (askError) {
-      setError(askError instanceof Error ? askError.message : "AI service unavailable.");
+      setAssistantError(askError instanceof Error ? askError.message : "AI service unavailable.");
     } finally {
       setPendingAction(null);
     }
@@ -207,48 +233,16 @@ export function ProjectDetail() {
       />
       <AssetTable assets={project.assets} />
 
-      <section className="panel">
-        <div className="panel-header">
-          <div>
-            <h3>Ask AI assistant</h3>
-            <p>Question the truth layer using project evidence and claim state.</p>
-          </div>
-        </div>
-        <div className="question-grid">
-          <textarea
-            aria-label="AI question"
-            value={question}
-            onChange={(event) => setQuestion(event.target.value)}
-            rows={3}
-          />
-          <div className="prompt-row">
-            {[
-              "Is this project ready for financing review?",
-              "What is blocking this project?",
-              "Can this project move to rebate submission?",
-            ].map((prompt) => (
-              <button
-                key={prompt}
-                type="button"
-                className="button-chip"
-                onClick={() => setQuestion(prompt)}
-              >
-                {prompt}
-              </button>
-            ))}
-          </div>
-          <button
-            type="button"
-            className="button-primary"
-            onClick={handleAsk}
-            disabled={pendingAction === "ask"}
-          >
-            {pendingAction === "ask" ? "Asking..." : "Ask question"}
-          </button>
-        </div>
-      </section>
-
-      <AiAnswerCard answer={answer} />
+      <AiAnswerCard
+        answer={answer}
+        isPending={pendingAction === "ask"}
+        question={question}
+        submittedQuestion={submittedQuestion}
+        errorMessage={assistantError}
+        promptSuggestions={ASSISTANT_PROMPTS}
+        onAsk={handleAsk}
+        onQuestionChange={setQuestion}
+      />
 
       <section className="panel">
         <div className="panel-header">

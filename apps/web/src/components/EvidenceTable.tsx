@@ -28,16 +28,18 @@ export function EvidenceTable({ evidence, onAddMockEvidence, isAdding = false }:
           <p>Source records and proof artifacts linked to project truth claims.</p>
         </div>
         <div className="toolbar">
-          <label>
+          <label className="select-field">
             <span className="field-label">Type</span>
-            <select value={filter} onChange={(event) => setFilter(event.target.value)}>
-              <option value="all">All evidence</option>
-              {evidenceTypes.map((type) => (
-                <option key={type} value={type}>
-                  {type}
-                </option>
-              ))}
-            </select>
+            <span className="select-shell">
+              <select className="select-control" value={filter} onChange={(event) => setFilter(event.target.value)}>
+                <option value="all">All evidence</option>
+                {evidenceTypes.map((type) => (
+                  <option key={type} value={type}>
+                    {type}
+                  </option>
+                ))}
+              </select>
+            </span>
           </label>
           <button
             type="button"

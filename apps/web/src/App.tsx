@@ -1,6 +1,7 @@
 import { useMemo } from "react";
+import { BadgeCheck, LayoutDashboard } from "lucide-react";
 import {
-  Link,
+  NavLink,
   Outlet,
   RouterProvider,
   createBrowserRouter,
@@ -12,11 +13,17 @@ import { ClaimLedger } from "./routes/ClaimLedger";
 import { Dashboard } from "./routes/Dashboard";
 import { ProjectDetail } from "./routes/ProjectDetail";
 
+const getNavLinkClassName = ({ isActive }: { isActive: boolean }) =>
+  isActive ? "nav-link nav-link-active" : "nav-link";
+
 function AppShell() {
   return (
     <div className="app-shell">
       <aside className="sidebar">
         <div>
+          <span className="brand-mark" aria-hidden="true">
+            S
+          </span>
           <p className="eyebrow">SolarOps</p>
           <h1>Truth Layer Console</h1>
           <p className="sidebar-copy">
@@ -24,8 +31,18 @@ function AppShell() {
           </p>
         </div>
         <nav className="nav-links" aria-label="Primary">
-          <Link to="/">Portfolio</Link>
-          <Link to="/claims">Claims</Link>
+          <NavLink to="/" end className={getNavLinkClassName}>
+            <span className="nav-link-label">
+              <LayoutDashboard className="nav-link-icon" aria-hidden="true" />
+              Portfolio
+            </span>
+          </NavLink>
+          <NavLink to="/claims" className={getNavLinkClassName}>
+            <span className="nav-link-label">
+              <BadgeCheck className="nav-link-icon" aria-hidden="true" />
+              Claims
+            </span>
+          </NavLink>
         </nav>
       </aside>
       <main className="main-panel">

@@ -113,40 +113,54 @@ export function ClaimLedger() {
           </div>
         </div>
         <div className="filters-grid">
-          <label>
+          <label className="select-field">
             <span className="field-label">Status</span>
-            <select value={status} onChange={(event) => setStatus(event.target.value)}>
-              <option value="">All statuses</option>
-              {Array.from(new Set(claims.map((claim) => claim.status))).map((value) => (
-                <option key={value} value={value}>
-                  {value}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            <span className="field-label">Claim type</span>
-            <select value={claimType} onChange={(event) => setClaimType(event.target.value)}>
-              <option value="">All claim types</option>
-              {Array.from(new Set(claims.map((claim) => claim.claim_type))).map((value) => (
-                <option key={value} value={value}>
-                  {value}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            <span className="field-label">Project</span>
-            <select value={projectId} onChange={(event) => setProjectId(event.target.value)}>
-              <option value="">All projects</option>
-              {Array.from(new Map(claims.map((claim) => [claim.project_id, claim.project_name])).entries()).map(
-                ([value, label]) => (
+            <span className="select-shell">
+              <select className="select-control" value={status} onChange={(event) => setStatus(event.target.value)}>
+                <option value="">All statuses</option>
+                {Array.from(new Set(claims.map((claim) => claim.status))).map((value) => (
                   <option key={value} value={value}>
-                    {label}
+                    {value}
                   </option>
-                ),
-              )}
-            </select>
+                ))}
+              </select>
+            </span>
+          </label>
+          <label className="select-field">
+            <span className="field-label">Claim type</span>
+            <span className="select-shell">
+              <select
+                className="select-control"
+                value={claimType}
+                onChange={(event) => setClaimType(event.target.value)}
+              >
+                <option value="">All claim types</option>
+                {Array.from(new Set(claims.map((claim) => claim.claim_type))).map((value) => (
+                  <option key={value} value={value}>
+                    {value}
+                  </option>
+                ))}
+              </select>
+            </span>
+          </label>
+          <label className="select-field">
+            <span className="field-label">Project</span>
+            <span className="select-shell">
+              <select
+                className="select-control"
+                value={projectId}
+                onChange={(event) => setProjectId(event.target.value)}
+              >
+                <option value="">All projects</option>
+                {Array.from(new Map(claims.map((claim) => [claim.project_id, claim.project_name])).entries()).map(
+                  ([value, label]) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ),
+                )}
+              </select>
+            </span>
           </label>
         </div>
       </section>

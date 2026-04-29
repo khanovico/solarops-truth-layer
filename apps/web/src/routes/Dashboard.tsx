@@ -194,38 +194,56 @@ export function Dashboard() {
           </div>
         </div>
         <div className="filters-grid">
-          <label>
+          <label className="select-field">
             <span className="field-label">Stage</span>
-            <select value={filters.stage} onChange={(event) => updateFilter("stage", event.target.value)}>
-              <option value="">All stages</option>
-              {Array.from(new Set(projects.map((project) => project.stage))).map((stage) => (
-                <option key={stage} value={stage}>
-                  {stage}
-                </option>
-              ))}
-            </select>
+            <span className="select-shell">
+              <select
+                className="select-control"
+                value={filters.stage}
+                onChange={(event) => updateFilter("stage", event.target.value)}
+              >
+                <option value="">All stages</option>
+                {Array.from(new Set(projects.map((project) => project.stage))).map((stage) => (
+                  <option key={stage} value={stage}>
+                    {stage}
+                  </option>
+                ))}
+              </select>
+            </span>
           </label>
-          <label>
+          <label className="select-field">
             <span className="field-label">Health</span>
-            <select value={filters.health} onChange={(event) => updateFilter("health", event.target.value)}>
-              <option value="">All health states</option>
-              {Array.from(new Set(projects.map((project) => project.health))).map((health) => (
-                <option key={health} value={health}>
-                  {health}
-                </option>
-              ))}
-            </select>
+            <span className="select-shell">
+              <select
+                className="select-control"
+                value={filters.health}
+                onChange={(event) => updateFilter("health", event.target.value)}
+              >
+                <option value="">All health states</option>
+                {Array.from(new Set(projects.map((project) => project.health))).map((health) => (
+                  <option key={health} value={health}>
+                    {health}
+                  </option>
+                ))}
+              </select>
+            </span>
           </label>
-          <label>
+          <label className="select-field">
             <span className="field-label">Owner</span>
-            <select value={filters.owner} onChange={(event) => updateFilter("owner", event.target.value)}>
-              <option value="">All owners</option>
-              {owners.map((owner) => (
-                <option key={owner} value={owner}>
-                  {owner}
-                </option>
-              ))}
-            </select>
+            <span className="select-shell">
+              <select
+                className="select-control"
+                value={filters.owner}
+                onChange={(event) => updateFilter("owner", event.target.value)}
+              >
+                <option value="">All owners</option>
+                {owners.map((owner) => (
+                  <option key={owner} value={owner}>
+                    {owner}
+                  </option>
+                ))}
+              </select>
+            </span>
           </label>
           <label className="checkbox-field">
             <input
