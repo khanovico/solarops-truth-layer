@@ -1,6 +1,7 @@
 import type {
   ActivityEvent,
   AiAnswer,
+  Blocker,
   Claim,
   ClaimStatus,
   Evidence,
@@ -15,14 +16,40 @@ type MockStore = {
   projectDetails: Record<string, ProjectDetail>;
 };
 
-function makeAiAnswer(project: ProjectDetail): AiAnswer {
-  const hasRebateAward = project.evidence.some(
-    (item) => item.evidence_type === "rebate_award_letter",
+function isRebateAwardMissingDocument(blocker: Blocker) {
+  if (blocker.category !== "missing_document") {
+    return false;
+  }
+
+  const text = `${blocker.title ?? ""} ${blocker.description}`.toLowerCase();
+  return (
+    text.includes("rebate_award_letter") ||
+    (text.includes("rebate") && text.includes("award letter"))
   );
+}
+
+function makeAiAnswer(project: ProjectDetail): AiAnswer {
+  const rebateAwardEvidenceIds = project.evidence
+    .filter((item) => item.evidence_type === "rebate_award_letter")
+    .map((item) => item.id);
+  const ppaTermSheetEvidenceIds = project.evidence
+    .filter((item) => item.evidence_type === "ppa_term_sheet")
+    .map((item) => item.id);
+  const hasRebateAward = rebateAwardEvidenceIds.length > 0;
+  const hasPpaTermSheet = ppaTermSheetEvidenceIds.length > 0;
   const hasHighBlocker = project.blockers.some(
     (blocker) => blocker.is_open && blocker.severity === "high",
   );
-  const missingEvidence = hasRebateAward ? [] : ["Rebate award letter"];
+  const missingEvidence = [
+    ...(hasRebateAward ? [] : ["Rebate award letter"]),
+    ...(hasPpaTermSheet ? [] : ["PPA term sheet"]),
+  ];
+  const missingEvidenceActions = missingEvidence.map((label) => `Upload ${label.toLowerCase()}`);
+  const blockedActions = hasHighBlocker ? ["Resolve open high-severity blocker"] : [];
+  const followUpActions =
+    missingEvidenceActions.length > 0 || blockedActions.length > 0
+      ? [...missingEvidenceActions, ...blockedActions, "Re-run financing readiness check"]
+      : ["Prepare financing memo", "Schedule lender review"];
 
   return {
     answer_text: hasHighBlocker
@@ -41,11 +68,14 @@ function makeAiAnswer(project: ProjectDetail): AiAnswer {
             ? "verified"
             : "missing_evidence",
         confidence: hasRebateAward && !hasHighBlocker ? 0.88 : 0.49,
-        evidence_ids: hasRebateAward
-          ? project.evidence
-              .filter((item) => item.evidence_type === "rebate_award_letter")
-              .map((item) => item.id)
-          : [],
+        evidence_ids: hasRebateAward ? rebateAwardEvidenceIds : [],
+      },
+      {
+        id: `${project.id}-claim-ppa-term-sheet`,
+        text: "PPA term sheet is present for financing review.",
+        status: hasPpaTermSheet ? "verified" : "missing_evidence",
+        confidence: hasPpaTermSheet ? 0.91 : 0.42,
+        evidence_ids: hasPpaTermSheet ? ppaTermSheetEvidenceIds : [],
       },
       {
         id: `${project.id}-claim-savings`,
@@ -57,15 +87,18 @@ function makeAiAnswer(project: ProjectDetail): AiAnswer {
     ],
     evidence_links: project.evidence.slice(0, 3),
     missing_evidence: missingEvidence,
-    recommended_next_actions: hasHighBlocker
-      ? ["Resolve interconnection blocker", "Confirm utility approvals"]
-      : hasRebateAward
-        ? ["Prepare financing memo", "Schedule lender review"]
-        : ["Upload rebate award letter", "Re-run financing readiness check"],
+    recommended_next_actions: followUpActions,
   };
 }
 
-function createClaims(projectId: string, projectName: string, evidenceCount = 0): Claim[] {
+function createClaims(
+  projectId: string,
+  projectName: string,
+  rebateEvidenceCount = 0,
+  ppaTermSheetEvidenceCount = 0,
+): Claim[] {
+  const financingEvidenceCount = rebateEvidenceCount + ppaTermSheetEvidenceCount;
+
   return [
     {
       id: `${projectId}-claim-1`,
@@ -73,9 +106,9 @@ function createClaims(projectId: string, projectName: string, evidenceCount = 0)
       project_name: projectName,
       claim_text: "Rebate award evidence is complete.",
       claim_type: "rebate",
-      status: evidenceCount > 0 ? "verified" : "missing_evidence",
-      confidence: evidenceCount > 0 ? 0.92 : 0.46,
-      evidence_count: evidenceCount,
+      status: rebateEvidenceCount > 0 ? "verified" : "missing_evidence",
+      confidence: rebateEvidenceCount > 0 ? 0.92 : 0.46,
+      evidence_count: rebateEvidenceCount,
       created_at: "2026-04-22T18:00:00.000Z",
     },
     {
@@ -84,9 +117,20 @@ function createClaims(projectId: string, projectName: string, evidenceCount = 0)
       project_name: projectName,
       claim_text: "Project can enter financing review this week.",
       claim_type: "financing",
-      status: evidenceCount > 0 ? "assumption" : "contradicted",
-      confidence: evidenceCount > 0 ? 0.59 : 0.22,
-      evidence_count: evidenceCount,
+      status: rebateEvidenceCount > 0 ? "assumption" : "contradicted",
+      confidence: rebateEvidenceCount > 0 ? 0.59 : 0.22,
+      evidence_count: financingEvidenceCount,
+      created_at: "2026-04-25T18:00:00.000Z",
+    },
+    {
+      id: `${projectId}-claim-3`,
+      project_id: projectId,
+      project_name: projectName,
+      claim_text: "PPA term sheet is available for lender review.",
+      claim_type: "ppa_term_sheet",
+      status: ppaTermSheetEvidenceCount > 0 ? "verified" : "missing_evidence",
+      confidence: ppaTermSheetEvidenceCount > 0 ? 0.91 : 0.42,
+      evidence_count: ppaTermSheetEvidenceCount,
       created_at: "2026-04-25T18:00:00.000Z",
     },
   ];
@@ -96,56 +140,90 @@ const alphaEvidence: Evidence[] = [
   {
     id: "ev-alpha-1",
     evidence_type: "utility_bill",
-    title: "Utility bill Q1",
-    summary: "Twelve month load baseline.",
+    title: "Prairie Mart utility bill Q1",
+    summary: "Twelve month load baseline for Small Roof Solar + Storage.",
     effective_date: "2026-03-01",
-    source_uri: "s3://solarops/project-alpha/utility-bill-q1.pdf",
+    source_uri: "s3://solarops/prairie-mart/utility-bill-q1.pdf",
+  },
+  {
+    id: "ev-alpha-2",
+    evidence_type: "site_survey",
+    title: "Prairie Mart site survey",
+    summary: "Roof survey confirms usable area and basic interconnection point.",
+    effective_date: "2026-03-12",
+    source_uri: "mock://docs/a-site-survey.pdf",
+  },
+  {
+    id: "ev-alpha-3",
+    evidence_type: "ppa_term_sheet",
+    title: "Prairie Mart PPA term sheet",
+    summary: "Draft PPA term sheet with ten-year term.",
+    effective_date: "2026-04-01",
+    source_uri: "mock://docs/a-ppa-term-sheet.pdf",
+  },
+  {
+    id: "ev-alpha-4",
+    evidence_type: "rebate_application",
+    title: "Prairie Mart rebate application",
+    summary: "Submitted utility rebate application.",
+    effective_date: "2026-04-08",
+    source_uri: "mock://docs/a-rebate-application.pdf",
   },
 ];
 
 const alphaProject: ProjectDetail = {
   id: "project-alpha",
-  name: "Project Alpha",
-  organization_name: "Northwind Foods",
-  site_name: "Oakland Cold Storage",
+  name: "Small Roof Solar + Storage",
+  organization_name: "Prairie Mart Holdings",
+  site_name: "Prairie Mart #014 - Joliet, IL",
   stage: "financing_review",
   health: "yellow",
-  owner_name: "A. Rivera",
+  owner_name: "Maya Patel",
   open_blocker_count: 1,
   missing_evidence_count: 1,
-  target_cod: "2026-10-10",
-  estimated_annual_savings_usd: 420000,
-  estimated_rebate_usd: 180000,
+  target_cod: "2026-10-15",
+  estimated_annual_savings_usd: 51000,
+  estimated_rebate_usd: 1180000,
   financing_type: "PPA",
-  ppa_term_years: 15,
+  ppa_term_years: 10,
   financing_readiness_status: "needs_evidence",
-  project_cost_usd: 2200000,
+  project_cost_usd: 1720000,
   milestones: [
     {
       id: "alpha-ms-1",
       milestone_type: "Site survey",
       status: "done",
       planned_date: "2026-02-10",
-      actual_date: "2026-02-12",
-      owner_name: "J. Singh",
+      actual_date: "2026-03-12",
+      owner_name: "Maya Patel",
     },
     {
       id: "alpha-ms-2",
+      milestone_type: "Rebate award received",
+      status: "blocked",
+      planned_date: "2026-05-15",
+      actual_date: null,
+      owner_name: "Maya Patel",
+    },
+    {
+      id: "alpha-ms-3",
       milestone_type: "Financing review",
       status: "in_progress",
       planned_date: "2026-05-15",
       actual_date: null,
-      owner_name: "A. Rivera",
+      owner_name: "Maya Patel",
     },
   ],
   blockers: [
     {
-      id: "alpha-bl-1",
-      category: "Interconnection",
-      severity: "high",
-      owner_name: "M. Chen",
-      description: "Awaiting utility approval package revision.",
+      id: "alpha-bl-rebate-award-letter",
+      category: "missing_document",
+      title: "Rebate award letter missing",
+      severity: "medium",
+      owner_name: "Maya Patel",
+      description: "Rebate missing-document blocker remains open until the award letter is uploaded.",
       is_open: true,
+      status: "open",
     },
   ],
   evidence: alphaEvidence,
@@ -160,13 +238,13 @@ const alphaProject: ProjectDetail = {
       status: "planned",
     },
   ],
-  claims: createClaims("project-alpha", "Project Alpha", 0),
+  claims: createClaims("project-alpha", "Small Roof Solar + Storage", 0, 1),
   activity_log: [
     {
       id: "alpha-act-1",
       event_type: "blocker_opened",
       actor: "System",
-      description: "Interconnection blocker remains unresolved.",
+      description: "Rebate award letter missing-document blocker opened.",
       timestamp: "2026-04-28T14:11:00.000Z",
     },
   ],
@@ -372,6 +450,9 @@ function refreshProject(project: ProjectDetail): ProjectDetail {
   const hasRebateAward = project.evidence.some(
     (item) => item.evidence_type === "rebate_award_letter",
   );
+  const hasPpaTermSheet = project.evidence.some(
+    (item) => item.evidence_type === "ppa_term_sheet",
+  );
   const openHighBlocker = project.blockers.some(
     (blocker) => blocker.is_open && blocker.severity === "high",
   );
@@ -388,6 +469,17 @@ function refreshProject(project: ProjectDetail): ProjectDetail {
       };
     }
 
+    if (claim.claim_type === "ppa_term_sheet") {
+      const status: ClaimStatus = hasPpaTermSheet ? "verified" : "missing_evidence";
+
+      return {
+        ...claim,
+        status,
+        confidence: hasPpaTermSheet ? 0.91 : 0.42,
+        evidence_count: hasPpaTermSheet ? 1 : 0,
+      };
+    }
+
     if (claim.claim_type === "financing") {
       const status: ClaimStatus = openHighBlocker
         ? "contradicted"
@@ -399,7 +491,7 @@ function refreshProject(project: ProjectDetail): ProjectDetail {
         ...claim,
         status,
         confidence: openHighBlocker ? 0.22 : hasRebateAward ? 0.59 : 0.22,
-        evidence_count: hasRebateAward ? 1 : 0,
+        evidence_count: (hasRebateAward ? 1 : 0) + (hasPpaTermSheet ? 1 : 0),
       };
     }
 
@@ -417,6 +509,15 @@ function refreshProject(project: ProjectDetail): ProjectDetail {
     ...project,
     health,
     financing_readiness_status,
+    milestones: project.milestones.map((milestone) =>
+      hasRebateAward && milestone.milestone_type === "Rebate award received"
+        ? {
+            ...milestone,
+            status: "done",
+            actual_date: milestone.actual_date ?? new Date().toISOString().slice(0, 10),
+          }
+        : milestone,
+    ),
     claims,
     open_blocker_count: project.blockers.filter((blocker) => blocker.is_open).length,
     missing_evidence_count: claims.filter((claim) => claim.status === "missing_evidence").length,
@@ -467,11 +568,14 @@ export function askMockAi(projectId: string): AiAnswer {
 
 export function addMockEvidence(projectId: string, evidenceType: string): ProjectDetail {
   const project = getMockProjectDetail(projectId);
+  const isRebateAward = evidenceType === "rebate_award_letter";
   const newEvidence: Evidence = {
     id: `ev-${projectId}-${Date.now()}`,
     evidence_type: evidenceType,
-    title: "Mock evidence upload",
-    summary: "Added from UI skeleton fallback flow.",
+    title: isRebateAward ? "Rebate award letter" : "Mock evidence upload",
+    summary: isRebateAward
+      ? "Award letter added from the offline fallback flow."
+      : "Added from UI skeleton fallback flow.",
     effective_date: new Date().toISOString().slice(0, 10),
     source_uri: `mock://evidence/${projectId}/${evidenceType}`,
   };
@@ -485,8 +589,29 @@ export function addMockEvidence(projectId: string, evidenceType: string): Projec
 
   mockStore.projectDetails[projectId] = {
     ...project,
+    blockers: isRebateAward
+      ? project.blockers.map((blocker) =>
+          blocker.is_open && isRebateAwardMissingDocument(blocker)
+            ? { ...blocker, is_open: false, status: "resolved" }
+            : blocker,
+        )
+      : project.blockers,
     evidence: [newEvidence, ...project.evidence],
-    activity_log: [activity, ...project.activity_log],
+    activity_log: [
+      activity,
+      ...(isRebateAward
+        ? [
+            {
+              id: `activity-${projectId}-blocker-${Date.now()}`,
+              event_type: "blocker_resolved",
+              actor: "Truth engine",
+              description: "Rebate missing-document blocker resolved by award letter upload.",
+              timestamp: new Date().toISOString(),
+            },
+          ]
+        : []),
+      ...project.activity_log,
+    ],
   };
   syncStore();
   return getMockProjectDetail(projectId);

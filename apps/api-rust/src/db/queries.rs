@@ -24,6 +24,8 @@ use crate::{
     error::{AppError, AppResult},
 };
 
+const MAX_REVERIFY_CLAIMS_PER_EVIDENCE_UPLOAD: i64 = 25;
+
 pub async fn portfolio_health(pool: &PgPool) -> AppResult<PortfolioHealth> {
     let row = sqlx::query_as::<_, PortfolioHealth>(
         r#"
@@ -305,6 +307,9 @@ pub async fn create_evidence(
         return Err(AppError::ProjectNotFound);
     }
 
+    let mut tx = pool.begin().await?;
+    lock_project_for_update_tx(&mut tx, project_id).await?;
+
     let evidence_id = Uuid::new_v4();
     sqlx::query(
         r#"
@@ -321,11 +326,11 @@ pub async fn create_evidence(
     .bind(&request.source_uri)
     .bind(&request.uploaded_by)
     .bind(request.effective_date)
-    .execute(pool)
+    .execute(&mut *tx)
     .await?;
 
-    write_activity(
-        pool,
+    write_activity_tx(
+        &mut tx,
         project_id,
         "evidence_added",
         &request.uploaded_by,
@@ -333,22 +338,25 @@ pub async fn create_evidence(
         json!({ "evidence_id": evidence_id, "evidence_type": request.evidence_type }),
     )
     .await?;
-    automate_rebate_award_letter(
-        pool,
+    automate_rebate_award_letter_tx(
+        &mut tx,
         project_id,
         &request.evidence_type,
         request.effective_date,
         &request.uploaded_by,
     )
     .await?;
-    recompute_project_health(pool, project_id).await?;
-    reverify_related_claims(
-        pool,
+    let snapshot = load_reverify_snapshot(&mut tx, project_id).await?;
+    recompute_project_health_tx(&mut tx, &snapshot).await?;
+    reverify_related_claims_tx(
+        &mut tx,
         project_id,
         &request.evidence_type,
         &request.uploaded_by,
+        &snapshot,
     )
     .await?;
+    tx.commit().await?;
     project_detail(pool, project_id).await
 }
 
@@ -786,11 +794,12 @@ async fn apply_claim_evaluation(
     Ok(())
 }
 
-async fn reverify_related_claims(
-    pool: &PgPool,
+async fn reverify_related_claims_tx(
+    tx: &mut Transaction<'_, Postgres>,
     project_id: Uuid,
     evidence_type: &str,
     actor: &str,
+    snapshot: &ReverifySnapshot,
 ) -> AppResult<()> {
     let claim_types = match evidence_type {
         "rebate_award_letter" | "rebate_application" => vec!["rebate", "readiness"],
@@ -799,12 +808,9 @@ async fn reverify_related_claims(
         "monitoring_snapshot" => vec!["financial"],
         _ => return Ok(()),
     };
-    let mut tx = pool.begin().await?;
-    let snapshot = load_reverify_snapshot(&mut tx, project_id).await?;
-    let claims = claims_for_reverify(&mut tx, project_id, &claim_types).await?;
+    let claims = claims_for_reverify(tx, project_id, &claim_types).await?;
 
     if claims.is_empty() {
-        tx.commit().await?;
         return Ok(());
     }
 
@@ -818,9 +824,8 @@ async fn reverify_related_claims(
             &snapshot.milestones,
         );
 
-        update_reverified_claim(&mut tx, project_id, actor, &claim, &evaluation).await?;
+        update_reverified_claim(tx, project_id, actor, &claim, &evaluation).await?;
     }
-    tx.commit().await?;
 
     Ok(())
 }
@@ -836,13 +841,6 @@ async fn load_reverify_snapshot(
     tx: &mut Transaction<'_, Postgres>,
     project_id: Uuid,
 ) -> AppResult<ReverifySnapshot> {
-    sqlx::query_scalar::<_, ()>(
-        "select pg_advisory_xact_lock(hashtextextended($1::text, 0::bigint))",
-    )
-    .bind(project_id.to_string())
-    .fetch_one(&mut **tx)
-    .await?;
-
     let project = sqlx::query_as::<_, ProjectRecord>(
         r#"
         select
@@ -913,10 +911,13 @@ async fn claims_for_reverify(
         select id, project_id, claim_text, claim_type, status, confidence::float8 as confidence, generated_by, created_at
         from claims
         where project_id = $1 and claim_type = any($2)
+        order by created_at desc
+        limit $3
         "#,
     )
     .bind(project_id)
     .bind(claim_types)
+    .bind(MAX_REVERIFY_CLAIMS_PER_EVIDENCE_UPLOAD)
     .fetch_all(&mut **tx)
     .await?)
 }
@@ -967,8 +968,8 @@ async fn update_reverified_claim(
     Ok(())
 }
 
-async fn automate_rebate_award_letter(
-    pool: &PgPool,
+async fn automate_rebate_award_letter_tx(
+    tx: &mut Transaction<'_, Postgres>,
     project_id: Uuid,
     evidence_type: &str,
     effective_date: Option<NaiveDate>,
@@ -998,12 +999,12 @@ async fn automate_rebate_award_letter(
         "#,
     )
     .bind(project_id)
-    .fetch_all(pool)
+    .fetch_all(&mut **tx)
     .await?;
 
     for blocker in resolved_blockers {
-        write_activity(
-            pool,
+        write_activity_tx(
+            tx,
             project_id,
             "blocker_resolved",
             actor,
@@ -1034,12 +1035,12 @@ async fn automate_rebate_award_letter(
     )
     .bind(project_id)
     .bind(effective_date)
-    .fetch_all(pool)
+    .fetch_all(&mut **tx)
     .await?;
 
     for (milestone_id, milestone_type) in completed_milestones {
-        write_activity(
-            pool,
+        write_activity_tx(
+            tx,
             project_id,
             "milestone_completed",
             actor,
@@ -1092,6 +1093,50 @@ async fn recompute_project_health(pool: &PgPool, project_id: Uuid) -> AppResult<
     Ok(())
 }
 
+async fn recompute_project_health_tx(
+    tx: &mut Transaction<'_, Postgres>,
+    snapshot: &ReverifySnapshot,
+) -> AppResult<()> {
+    let evidence_types: Vec<String> = snapshot
+        .evidence
+        .iter()
+        .map(|(_, evidence_type)| evidence_type.clone())
+        .collect();
+    let overdue_count = snapshot
+        .milestones
+        .iter()
+        .filter(|milestone| is_overdue(milestone.planned_date, &milestone.status))
+        .count()
+        .try_into()
+        .unwrap_or(0);
+    let health = compute_project_health(
+        &snapshot.project.stage,
+        &evidence_types,
+        &snapshot.blockers,
+        overdue_count,
+    );
+
+    sqlx::query("update projects set health = $1, updated_at = now() where id = $2")
+        .bind(health)
+        .bind(snapshot.project.id)
+        .execute(&mut **tx)
+        .await?;
+    Ok(())
+}
+
+async fn lock_project_for_update_tx(
+    tx: &mut Transaction<'_, Postgres>,
+    project_id: Uuid,
+) -> AppResult<()> {
+    sqlx::query_scalar::<_, ()>(
+        "select pg_advisory_xact_lock(hashtextextended($1::text, 0::bigint))",
+    )
+    .bind(project_id.to_string())
+    .fetch_one(&mut **tx)
+    .await?;
+    Ok(())
+}
+
 async fn write_activity(
     pool: &PgPool,
     project_id: Uuid,
@@ -1110,6 +1155,28 @@ async fn write_activity(
     .bind(description)
     .bind(metadata)
     .execute(pool)
+    .await?;
+    Ok(())
+}
+
+async fn write_activity_tx(
+    tx: &mut Transaction<'_, Postgres>,
+    project_id: Uuid,
+    event_type: &str,
+    actor: &str,
+    description: &str,
+    metadata: serde_json::Value,
+) -> AppResult<()> {
+    sqlx::query(
+        "insert into activity_events (id, project_id, event_type, actor, description, metadata) values ($1, $2, $3, $4, $5, $6)",
+    )
+    .bind(Uuid::new_v4())
+    .bind(project_id)
+    .bind(event_type)
+    .bind(actor)
+    .bind(description)
+    .bind(metadata)
+    .execute(&mut **tx)
     .await?;
     Ok(())
 }
