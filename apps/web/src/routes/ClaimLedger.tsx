@@ -1,0 +1,172 @@
+import { useEffect, useMemo, useState } from "react";
+import { ClaimStatusBadge } from "../components/ClaimStatusBadge";
+import { useApi } from "../lib/api-context";
+import type { Claim } from "../lib/types";
+
+export function ClaimLedger() {
+  const api = useApi();
+  const [claims, setClaims] = useState<Claim[]>([]);
+  const [warning, setWarning] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [status, setStatus] = useState("");
+  const [claimType, setClaimType] = useState("");
+  const [projectId, setProjectId] = useState("");
+
+  useEffect(() => {
+    let active = true;
+
+    async function load() {
+      setIsLoading(true);
+      setError(null);
+
+      try {
+        const result = await api.getClaims();
+        if (!active) {
+          return;
+        }
+        setClaims(result.data);
+        setWarning(result.warning ?? null);
+      } catch (loadError) {
+        if (!active) {
+          return;
+        }
+        setError(loadError instanceof Error ? loadError.message : "Claim ledger failed to load.");
+      } finally {
+        if (active) {
+          setIsLoading(false);
+        }
+      }
+    }
+
+    load();
+    return () => {
+      active = false;
+    };
+  }, [api]);
+
+  const filteredClaims = useMemo(() => {
+    return claims.filter((claim) => {
+      if (status && claim.status !== status) {
+        return false;
+      }
+      if (claimType && claim.claim_type !== claimType) {
+        return false;
+      }
+      if (projectId && claim.project_id !== projectId) {
+        return false;
+      }
+      return true;
+    });
+  }, [claimType, claims, projectId, status]);
+
+  if (isLoading) {
+    return <div className="state-panel">Loading claim ledger…</div>;
+  }
+
+  if (error) {
+    return <div className="state-panel state-error">Claim error: {error}</div>;
+  }
+
+  return (
+    <div className="page">
+      <header className="page-header">
+        <div>
+          <p className="eyebrow">Claims</p>
+          <h2>Cross-project claim ledger</h2>
+          <p className="page-copy">
+            Inspect claim status, confidence, and evidence coverage across the full portfolio.
+          </p>
+        </div>
+        {warning ? <div className="notice-banner">{warning}</div> : null}
+      </header>
+
+      <section className="panel">
+        <div className="panel-header">
+          <div>
+            <h3>Filters</h3>
+            <p>Status, claim type, and project filters for rapid triage.</p>
+          </div>
+        </div>
+        <div className="filters-grid">
+          <label>
+            <span className="field-label">Status</span>
+            <select value={status} onChange={(event) => setStatus(event.target.value)}>
+              <option value="">All statuses</option>
+              {Array.from(new Set(claims.map((claim) => claim.status))).map((value) => (
+                <option key={value} value={value}>
+                  {value}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <span className="field-label">Claim type</span>
+            <select value={claimType} onChange={(event) => setClaimType(event.target.value)}>
+              <option value="">All claim types</option>
+              {Array.from(new Set(claims.map((claim) => claim.claim_type))).map((value) => (
+                <option key={value} value={value}>
+                  {value}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <span className="field-label">Project</span>
+            <select value={projectId} onChange={(event) => setProjectId(event.target.value)}>
+              <option value="">All projects</option>
+              {Array.from(new Map(claims.map((claim) => [claim.project_id, claim.project_name])).entries()).map(
+                ([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ),
+              )}
+            </select>
+          </label>
+        </div>
+      </section>
+
+      <section className="panel">
+        <div className="panel-header">
+          <div>
+            <h3>Claim ledger</h3>
+            <p>Missing evidence claims remain visually obvious. Contradictions stay urgent.</p>
+          </div>
+        </div>
+        {filteredClaims.length === 0 ? (
+          <div className="empty-state">No claims match the current filters.</div>
+        ) : (
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>Project</th>
+                <th>Claim</th>
+                <th>Claim type</th>
+                <th>Status</th>
+                <th>Confidence</th>
+                <th>Evidence count</th>
+                <th>Created at</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredClaims.map((claim) => (
+                <tr key={claim.id}>
+                  <td>{claim.project_name}</td>
+                  <td>{claim.claim_text}</td>
+                  <td>{claim.claim_type}</td>
+                  <td>
+                    <ClaimStatusBadge status={claim.status} />
+                  </td>
+                  <td>{Math.round(claim.confidence * 100)}%</td>
+                  <td>{claim.evidence_count}</td>
+                  <td>{new Date(claim.created_at).toLocaleDateString("en-US")}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </section>
+    </div>
+  );
+}
