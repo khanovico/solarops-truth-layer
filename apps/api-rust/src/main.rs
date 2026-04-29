@@ -1,3 +1,5 @@
+#![allow(clippy::needless_raw_string_hashes, clippy::struct_field_names)]
+
 mod ai_client;
 mod db;
 mod domain;

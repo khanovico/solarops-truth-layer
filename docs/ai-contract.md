@@ -23,3 +23,11 @@ Unsafe output handling:
 - Estimated savings are not treated as realized savings without monitoring evidence.
 - Rebate secured claims require `rebate_award_letter`.
 - Installation readiness requires permit approval, interconnection approval, and equipment ordered.
+
+Mock routing:
+
+- Questions containing `financing` or `financial` evaluate financing readiness.
+- Questions containing `blocked` or `blocker` explain blockers.
+- Questions containing `changed` or `this week` summarize recent activity.
+- Questions containing `installation` or `install` evaluate installation readiness.
+- Other questions summarize project state from provided context only.

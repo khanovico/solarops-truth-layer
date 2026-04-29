@@ -17,6 +17,7 @@ pub struct ProjectSummaryRow {
     pub open_blocker_count: i64,
     pub target_cod: Option<NaiveDate>,
     pub evidence_types: Vec<String>,
+    pub total_count: i64,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -149,6 +150,15 @@ pub struct LinkedEvidence {
     pub support_type: String,
 }
 
+#[derive(Debug, Clone, FromRow)]
+pub struct LinkedEvidenceRow {
+    pub claim_id: Uuid,
+    pub id: Uuid,
+    pub title: String,
+    pub evidence_type: String,
+    pub support_type: String,
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct ClaimWithEvidence {
     pub id: Uuid,
@@ -173,6 +183,27 @@ pub struct GlobalClaim {
     pub confidence: f64,
     pub evidence_count: i64,
     pub created_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, FromRow)]
+pub struct GlobalClaimRow {
+    pub id: Uuid,
+    pub project_id: Uuid,
+    pub project_name: String,
+    pub claim_text: String,
+    pub claim_type: String,
+    pub status: String,
+    pub confidence: f64,
+    pub evidence_count: i64,
+    pub created_at: DateTime<Utc>,
+    pub total_count: i64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct PaginatedResponse<T> {
+    pub items: Vec<T>,
+    pub next_cursor: Option<String>,
+    pub total: i64,
 }
 
 #[derive(Debug, Clone, Serialize, FromRow)]
@@ -240,6 +271,17 @@ pub struct ProjectFilters {
     pub health: Option<String>,
     pub owner: Option<String>,
     pub has_open_blockers: Option<bool>,
+    pub limit: Option<i64>,
+    pub cursor: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ClaimFilters {
+    pub status: Option<String>,
+    pub claim_type: Option<String>,
+    pub project_id: Option<Uuid>,
+    pub limit: Option<i64>,
+    pub cursor: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]

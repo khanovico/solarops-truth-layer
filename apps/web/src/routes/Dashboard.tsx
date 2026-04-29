@@ -25,6 +25,7 @@ export function Dashboard() {
   const [warning, setWarning] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const filterKey = searchParams.toString();
 
   const filters: DashboardFilters = {
     stage: searchParams.get("stage") ?? defaultFilters.stage,
@@ -43,7 +44,7 @@ export function Dashboard() {
       try {
         const [portfolioResult, projectsResult] = await Promise.all([
           api.getPortfolioHealth(),
-          api.getProjects(),
+          api.getProjects(filters),
         ]);
 
         if (!active) {
@@ -70,7 +71,7 @@ export function Dashboard() {
     return () => {
       active = false;
     };
-  }, [api]);
+  }, [api, filterKey]);
 
   const owners = Array.from(new Set(projects.map((project) => project.owner_name)));
 

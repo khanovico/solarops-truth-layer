@@ -3,9 +3,10 @@ import type { Blocker } from "../lib/types";
 type BlockerPanelProps = {
   blockers: Blocker[];
   onResolve: (blockerId: string) => Promise<void> | void;
+  pendingBlockerId?: string | null;
 };
 
-export function BlockerPanel({ blockers, onResolve }: BlockerPanelProps) {
+export function BlockerPanel({ blockers, onResolve, pendingBlockerId = null }: BlockerPanelProps) {
   const ordered = [...blockers].sort((left, right) => Number(right.is_open) - Number(left.is_open));
 
   return (
@@ -32,8 +33,13 @@ export function BlockerPanel({ blockers, onResolve }: BlockerPanelProps) {
                   </span>
                 </div>
                 {blocker.is_open ? (
-                  <button type="button" className="button-secondary" onClick={() => onResolve(blocker.id)}>
-                    Resolve
+                  <button
+                    type="button"
+                    className="button-secondary"
+                    onClick={() => onResolve(blocker.id)}
+                    disabled={pendingBlockerId === blocker.id}
+                  >
+                    {pendingBlockerId === blocker.id ? "Resolving..." : "Resolve"}
                   </button>
                 ) : null}
               </div>

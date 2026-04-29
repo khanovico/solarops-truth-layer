@@ -26,7 +26,7 @@ async fn ask(
         .ai_client
         .ask(&detail, &request.question)
         .await?
-        .validate_against_project(&detail);
+        .validate_against_project(&detail)?;
     queries::persist_ai_answer(
         &state.pool,
         project_id,

@@ -15,3 +15,11 @@ Claim statuses:
 - `assumption`: inferred from structured data without direct evidence.
 - `missing_evidence`: required support is absent.
 - `contradicted`: available records conflict with the claim.
+
+Readiness rules:
+
+- Rebate secured requires `rebate_award_letter`.
+- Financing readiness requires project cost, annual savings, financing type, PPA/financing evidence, rebate proof or explicit pending status, and no high open blocker.
+- Installation readiness requires permit approval, interconnection approval, equipment ordered, and no high open blocker.
+- Realized savings require commissioning plus `monitoring_snapshot`.
+- Open high `data_conflict` blockers contradict dependent claims.

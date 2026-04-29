@@ -118,16 +118,7 @@ function renderWithApi(
     getProject: async () => ({ data: projectDetail }),
     getClaims: async () => ({ data: claims }),
     askProjectAi: async () => ({ data: answer }),
-    addMockEvidence: async () => ({
-      data: {
-        id: "ev-1",
-        evidence_type: "rebate_award_letter",
-        title: "Rebate award",
-        summary: "Letter added.",
-        effective_date: "2026-04-29",
-        source_uri: "mock://evidence",
-      },
-    }),
+    addMockEvidence: async () => ({ data: projectDetail }),
     resolveBlocker: async () => ({ data: { ok: true } }),
     reverifyClaim: async () => ({ data: claims[0] }),
     ...overrides,

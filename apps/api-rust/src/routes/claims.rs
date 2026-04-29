@@ -1,6 +1,6 @@
 use axum::{
     Json, Router,
-    extract::{Path, State},
+    extract::{Path, Query, State},
     routing::{get, post},
 };
 use uuid::Uuid;
@@ -8,7 +8,9 @@ use uuid::Uuid;
 use crate::{
     AppState,
     db::{
-        models::{ClaimReverifyRequest, ClaimWithEvidence, GlobalClaim},
+        models::{
+            ClaimFilters, ClaimReverifyRequest, ClaimWithEvidence, GlobalClaim, PaginatedResponse,
+        },
         queries,
     },
     error::AppResult,
@@ -24,8 +26,11 @@ pub fn router() -> Router<AppState> {
         )
 }
 
-async fn list_all_claims(State(state): State<AppState>) -> AppResult<Json<Vec<GlobalClaim>>> {
-    Ok(Json(queries::list_all_claims(&state.pool).await?))
+async fn list_all_claims(
+    State(state): State<AppState>,
+    Query(filters): Query<ClaimFilters>,
+) -> AppResult<Json<PaginatedResponse<GlobalClaim>>> {
+    Ok(Json(queries::list_all_claims(&state.pool, &filters).await?))
 }
 
 async fn list_claims(

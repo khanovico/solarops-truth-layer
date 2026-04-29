@@ -147,3 +147,11 @@
   Active ticket ledger: `.agents/docs/TICKET_LEDGER.md`.
 
   Active implementation plan: `.agents/docs/plans/2026-04-29-solarops-truth-layer.md`.
+
+  ## Implementation Status
+
+  - T1 foundation is implemented.
+  - T2 core project operations are implemented.
+  - T3 evidence, claims, blockers, and activity layer is implemented.
+  - T4 AI assistant is implemented.
+  - T5 final polish, validation, and review is in progress.

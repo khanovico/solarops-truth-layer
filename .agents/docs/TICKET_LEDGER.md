@@ -5,11 +5,11 @@ Status values: `todo`, `in_progress`, `review`, `done`, `blocked`.
 | Ticket | Status | Scope | Verification | Commit |
 | --- | --- | --- | --- | --- |
 | T0 | done | Project management plan, ticket ledger, branch setup | Plan reviewed against PRD and requirements | d5c393c |
-| T1 | todo | Foundation stack: repo structure, root Docker/Make/env, database schema/seed, service health endpoints | Service health tests; compose config sanity; first docs update | pending |
-| T2 | todo | Core project operations: Rust project queries, portfolio/list/detail endpoints, dashboard and detail browse UI | Rust endpoint tests; frontend component/query tests; build | pending |
-| T3 | todo | Evidence, claim, blocker, and activity layer | Deterministic rule tests; endpoint tests; frontend ledger/action tests | pending |
-| T4 | todo | AI assistant: Python mock AI, Rust proxy/validation/persistence, frontend assistant | Python AI tests; Rust AI endpoint tests; workflow A-E checks | pending |
-| T5 | todo | Polish, docs, full validation, self-review, scalability review | Rust/Python/frontend tests; `npm run build`; reviewer findings resolved | pending |
+| T1 | done | Foundation stack: repo structure, root Docker/Make/env, database schema/seed, service health endpoints | `docker compose config`; Rust health test; Python health test; frontend build | d647c36, 03c74d2 |
+| T2 | done | Core project operations: Rust project queries, portfolio/list/detail endpoints, dashboard and detail browse UI | Rust domain/API compile tests; frontend component/query tests; build | d647c36, 03c74d2, 2c13200 |
+| T3 | done | Evidence, claim, blocker, and activity layer | Rust deterministic claim tests; Python AI tests; frontend ledger/action tests | d647c36, 2c13200 |
+| T4 | done | AI assistant: Python mock AI, Rust proxy/validation/persistence, frontend assistant | Python mock tests; Rust AI client compile; frontend AI missing-evidence test | d647c36, 03c74d2, 2c13200 |
+| T5 | in_progress | Polish, docs, full validation, self-review, scalability review | Rust/Python/frontend tests; `npm run build`; reviewer findings resolved | pending |
 
 ## Batch Plan
 

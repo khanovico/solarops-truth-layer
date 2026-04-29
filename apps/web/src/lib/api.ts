@@ -13,6 +13,8 @@ import type {
   AiClaimBreakdown,
   ApiResult,
   Claim,
+  ClaimsFilters,
+  DashboardFilters,
   Evidence,
   PortfolioHealth,
   ProjectDetail,
@@ -26,6 +28,7 @@ type FetchLike = typeof fetch;
 type RequestOptions = RequestInit & {
   fallback: () => unknown;
   warning: string;
+  allowFallback?: boolean;
 };
 
 function getApiBaseUrl() {
@@ -34,6 +37,14 @@ function getApiBaseUrl() {
       import.meta.env &&
       import.meta.env.VITE_API_BASE_URL) ||
     "http://localhost:8080"
+  );
+}
+
+function shouldUseFallback() {
+  return (
+    typeof import.meta !== "undefined" &&
+    import.meta.env &&
+    import.meta.env.VITE_ENABLE_MOCK_FALLBACK !== "false"
   );
 }
 
@@ -55,12 +66,45 @@ export function createApiClient(fetchImpl: FetchLike = fetch) {
 
       const data = (await response.json()) as T;
       return { data };
-    } catch {
-      return {
-        data: options.fallback() as T,
-        warning: options.warning,
-      };
+    } catch (error) {
+      if (options.allowFallback ?? shouldUseFallback()) {
+        return {
+          data: options.fallback() as T,
+          warning: options.warning,
+        };
+      }
+      throw error;
     }
+  }
+
+  async function requestProjectDetail(path: string, options: RequestOptions): Promise<ApiResult<ProjectDetail>> {
+    const result = await request<unknown>(path, options);
+    return { ...result, data: normalizeProjectDetail(result.data) };
+  }
+
+  async function requestClaim(path: string, options: RequestOptions): Promise<ApiResult<Claim>> {
+    const result = await request<unknown>(path, options);
+    return { ...result, data: normalizeClaim(result.data) };
+  }
+
+  function projectListItems(input: unknown): ProjectSummary[] {
+    if (Array.isArray(input)) {
+      return input as ProjectSummary[];
+    }
+    if (input && typeof input === "object" && "items" in input) {
+      return (input as { items: ProjectSummary[] }).items;
+    }
+    return [];
+  }
+
+  function claimsItems(input: unknown): unknown[] {
+    if (Array.isArray(input)) {
+      return input;
+    }
+    if (input && typeof input === "object" && "items" in input) {
+      return (input as { items: unknown[] }).items;
+    }
+    return [];
   }
 
   return {
@@ -72,12 +116,26 @@ export function createApiClient(fetchImpl: FetchLike = fetch) {
       });
       return { ...result, data: normalizePortfolioHealth(result.data) };
     },
-    async getProjects() {
-      return request<ProjectSummary[]>("/projects", {
+    async getProjects(filters?: DashboardFilters) {
+      const params = new URLSearchParams({ limit: "100" });
+      if (filters?.stage) {
+        params.set("stage", filters.stage);
+      }
+      if (filters?.health) {
+        params.set("health", filters.health);
+      }
+      if (filters?.owner) {
+        params.set("owner", filters.owner);
+      }
+      if (filters?.hasOpenBlockers) {
+        params.set("has_open_blockers", "true");
+      }
+      const result = await request<unknown>(`/projects?${params.toString()}`, {
         method: "GET",
         fallback: getMockProjects,
         warning: "Live project list unavailable. Showing seeded fallback data.",
       });
+      return { ...result, data: projectListItems(result.data) };
     },
     async getProject(projectId: string) {
       const result = await request<unknown>(`/projects/${projectId}`, {
@@ -87,13 +145,23 @@ export function createApiClient(fetchImpl: FetchLike = fetch) {
       });
       return { ...result, data: normalizeProjectDetail(result.data) };
     },
-    async getClaims() {
-      const result = await request<unknown[]>("/claims", {
+    async getClaims(filters?: ClaimsFilters) {
+      const params = new URLSearchParams({ limit: "100" });
+      if (filters?.status) {
+        params.set("status", filters.status);
+      }
+      if (filters?.claimType) {
+        params.set("claim_type", filters.claimType);
+      }
+      if (filters?.projectId) {
+        params.set("project_id", filters.projectId);
+      }
+      const result = await request<unknown>(`/claims?${params.toString()}`, {
         method: "GET",
         fallback: getMockClaims,
         warning: "Live claim ledger unavailable. Showing seeded fallback data.",
       });
-      return { ...result, data: result.data.map((claim) => normalizeClaim(claim)) };
+      return { ...result, data: claimsItems(result.data).map((claim) => normalizeClaim(claim)) };
     },
     async askProjectAi(projectId: string, question: string) {
       const result = await request<unknown>(`/projects/${projectId}/ai/ask`, {
@@ -105,7 +173,7 @@ export function createApiClient(fetchImpl: FetchLike = fetch) {
       return { ...result, data: normalizeAiAnswer(result.data) };
     },
     async addMockEvidence(projectId: string, evidenceType: string) {
-      return request<unknown>(`/projects/${projectId}/evidence`, {
+      return requestProjectDetail(`/projects/${projectId}/evidence`, {
         method: "POST",
         body: JSON.stringify({
           evidence_type: evidenceType,
@@ -135,7 +203,7 @@ export function createApiClient(fetchImpl: FetchLike = fetch) {
       });
     },
     async reverifyClaim(projectId: string, claimId: string) {
-      const result = await request<unknown>(`/projects/${projectId}/claims/${claimId}/reverify`, {
+      const result = await requestClaim(`/projects/${projectId}/claims/${claimId}/reverify`, {
         method: "POST",
         body: JSON.stringify({ actor: "Demo User" }),
         fallback: () => reverifyMockClaim(projectId, claimId),

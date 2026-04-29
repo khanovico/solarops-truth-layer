@@ -46,8 +46,7 @@ impl AppError {
             Self::InvalidProjectStage | Self::InvalidEvidenceType | Self::InvalidClaimStatus => {
                 StatusCode::BAD_REQUEST
             }
-            Self::AiServiceUnavailable => StatusCode::BAD_GATEWAY,
-            Self::AiResponseInvalid => StatusCode::BAD_GATEWAY,
+            Self::AiServiceUnavailable | Self::AiResponseInvalid => StatusCode::BAD_GATEWAY,
             Self::Database(_) => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }

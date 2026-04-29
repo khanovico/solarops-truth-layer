@@ -123,8 +123,8 @@ Interaction thesis:
 
 - [x] T0 planning docs created.
 - [x] T0 committed (`d5c393c`).
-- [ ] T1 implemented, tested, documented, committed.
-- [ ] T2 implemented, tested, documented, committed.
-- [ ] T3 implemented, tested, documented, committed.
-- [ ] T4 implemented, tested, documented, committed.
+- [x] T1 implemented, tested, documented, committed (`d647c36`, `03c74d2`).
+- [x] T2 implemented, tested, documented, committed (`d647c36`, `03c74d2`, `2c13200`).
+- [x] T3 implemented, tested, documented, committed (`d647c36`, `2c13200`).
+- [x] T4 implemented, tested, documented, committed (`d647c36`, `03c74d2`, `2c13200`).
 - [ ] T5 validation/review/docs complete and committed.

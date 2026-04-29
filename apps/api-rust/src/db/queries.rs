@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use serde_json::json;
 use sqlx::PgPool;
 use uuid::Uuid;
@@ -6,8 +8,9 @@ use crate::{
     ai_client::AiAnswer,
     db::models::{
         ActivityEvent, AiRun, Asset, Blocker, BlockerUpdateRequest, Claim, ClaimEvidenceLink,
-        ClaimReverifyRequest, ClaimWithEvidence, EvidenceCreateRequest, EvidenceDocument,
-        LinkedEvidence, Milestone, Organization, PortfolioHealth, ProjectDetail, ProjectFilters,
+        ClaimFilters, ClaimReverifyRequest, ClaimWithEvidence, EvidenceCreateRequest,
+        EvidenceDocument, GlobalClaim, GlobalClaimRow, LinkedEvidence, LinkedEvidenceRow,
+        Milestone, Organization, PaginatedResponse, PortfolioHealth, ProjectDetail, ProjectFilters,
         ProjectRecord, ProjectSummary, ProjectSummaryRow, Site, StageUpdateRequest,
     },
     domain::{
@@ -85,57 +88,71 @@ pub async fn portfolio_health(pool: &PgPool) -> AppResult<PortfolioHealth> {
 pub async fn list_projects(
     pool: &PgPool,
     filters: &ProjectFilters,
-) -> AppResult<Vec<ProjectSummary>> {
+) -> AppResult<PaginatedResponse<ProjectSummary>> {
+    let limit = normalized_limit(filters.limit);
+    let offset = cursor_offset(filters.cursor.as_deref());
     let rows = sqlx::query_as::<_, ProjectSummaryRow>(
         r#"
-        select
-          p.id,
-          p.name,
-          o.name as organization_name,
-          s.name as site_name,
-          p.stage,
-          p.health,
-          p.estimated_annual_savings_usd::float8 as estimated_annual_savings_usd,
-          p.estimated_rebate_usd::float8 as estimated_rebate_usd,
-          p.owner_name,
-          count(distinct b.id) filter (where b.status = 'open')::bigint as open_blocker_count,
-          p.target_cod,
-          coalesce(array_remove(array_agg(distinct e.evidence_type), null), array[]::text[]) as evidence_types
-        from projects p
-        join sites s on s.id = p.site_id
-        join organizations o on o.id = s.organization_id
-        left join blockers b on b.project_id = p.id
-        left join evidence_documents e on e.project_id = p.id
-        where ($1::text is null or p.stage = $1)
-          and ($2::text is null or p.health = $2)
-          and ($3::text is null or lower(p.owner_name) like '%' || lower($3) || '%')
-        group by p.id, o.name, s.name
-        having (
-          $4::bool is null
-          or ($4 = true and count(distinct b.id) filter (where b.status = 'open') > 0)
-          or ($4 = false and count(distinct b.id) filter (where b.status = 'open') = 0)
+        with project_rows as (
+          select
+            p.id,
+            p.name,
+            o.name as organization_name,
+            s.name as site_name,
+            p.stage,
+            p.health,
+            p.estimated_annual_savings_usd::float8 as estimated_annual_savings_usd,
+            p.estimated_rebate_usd::float8 as estimated_rebate_usd,
+            p.owner_name,
+            count(distinct b.id) filter (where b.status = 'open')::bigint as open_blocker_count,
+            p.target_cod,
+            coalesce(array_remove(array_agg(distinct e.evidence_type), null), array[]::text[]) as evidence_types
+          from projects p
+          join sites s on s.id = p.site_id
+          join organizations o on o.id = s.organization_id
+          left join blockers b on b.project_id = p.id
+          left join evidence_documents e on e.project_id = p.id
+          where ($1::text is null or p.stage = $1)
+            and ($2::text is null or p.health = $2)
+            and ($3::text is null or lower(p.owner_name) like '%' || lower($3) || '%')
+          group by p.id, o.name, s.name
+          having (
+            $4::bool is null
+            or ($4 = true and count(distinct b.id) filter (where b.status = 'open') > 0)
+            or ($4 = false and count(distinct b.id) filter (where b.status = 'open') = 0)
+          )
         )
+        select *, count(*) over()::bigint as total_count
+        from project_rows
         order by
-          case p.health
+          case health
             when 'red' then 0
             when 'yellow' then 1
             when 'unknown' then 2
             when 'green' then 3
             else 4
           end,
-          p.target_cod nulls last,
-          p.name
+          target_cod nulls last,
+          name
+        limit $5
+        offset $6
         "#,
     )
     .bind(&filters.stage)
     .bind(&filters.health)
     .bind(&filters.owner)
     .bind(filters.has_open_blockers)
+    .bind(limit + 1)
+    .bind(offset)
     .fetch_all(pool)
     .await?;
 
-    Ok(rows
+    let total = rows.first().map_or(0, |row| row.total_count);
+    let limit_usize = usize::try_from(limit).unwrap_or(100);
+    let has_next = rows.len() > limit_usize;
+    let items = rows
         .into_iter()
+        .take(limit_usize)
         .map(|row| ProjectSummary {
             id: row.id,
             name: row.name,
@@ -153,7 +170,13 @@ pub async fn list_projects(
             ),
             target_cod: row.target_cod,
         })
-        .collect())
+        .collect();
+
+    Ok(PaginatedResponse {
+        items,
+        next_cursor: has_next.then(|| (offset + limit).to_string()),
+        total,
+    })
 }
 
 pub async fn project_detail(pool: &PgPool, project_id: Uuid) -> AppResult<ProjectDetail> {
@@ -190,7 +213,7 @@ pub async fn project_detail(pool: &PgPool, project_id: Uuid) -> AppResult<Projec
     .bind(project_id)
     .fetch_all(pool)
     .await?;
-    let evidence = evidence_documents(pool, project_id).await?;
+    let evidence = evidence_documents(pool, project_id, 100).await?;
     let claims = claims_with_evidence(pool, project_id).await?;
     let claim_evidence_links = sqlx::query_as::<_, ClaimEvidenceLink>(
         r#"
@@ -206,7 +229,7 @@ pub async fn project_detail(pool: &PgPool, project_id: Uuid) -> AppResult<Projec
     .await?;
     let blockers = blockers(pool, project_id).await?;
     let activity_events = sqlx::query_as::<_, ActivityEvent>(
-        "select id, project_id, event_type, actor, description, metadata, created_at from activity_events where project_id = $1 order by created_at desc",
+        "select id, project_id, event_type, actor, description, metadata, created_at from activity_events where project_id = $1 order by created_at desc limit 50",
     )
     .bind(project_id)
     .fetch_all(pool)
@@ -327,28 +350,72 @@ pub async fn list_claims(pool: &PgPool, project_id: Uuid) -> AppResult<Vec<Claim
     claims_with_evidence(pool, project_id).await
 }
 
-pub async fn list_all_claims(pool: &PgPool) -> AppResult<Vec<crate::db::models::GlobalClaim>> {
-    Ok(sqlx::query_as::<_, crate::db::models::GlobalClaim>(
+pub async fn list_all_claims(
+    pool: &PgPool,
+    filters: &ClaimFilters,
+) -> AppResult<PaginatedResponse<GlobalClaim>> {
+    let limit = normalized_limit(filters.limit);
+    let offset = cursor_offset(filters.cursor.as_deref());
+    let rows = sqlx::query_as::<_, GlobalClaimRow>(
         r#"
-        select
-          c.id,
-          c.project_id,
-          p.name as project_name,
-          c.claim_text,
-          c.claim_type,
-          c.status,
-          c.confidence::float8 as confidence,
-          count(l.evidence_id)::bigint as evidence_count,
-          c.created_at
-        from claims c
-        join projects p on p.id = c.project_id
-        left join claim_evidence_links l on l.claim_id = c.id
-        group by c.id, p.name
-        order by c.created_at desc
+        with claim_rows as (
+          select
+            c.id,
+            c.project_id,
+            p.name as project_name,
+            c.claim_text,
+            c.claim_type,
+            c.status,
+            c.confidence::float8 as confidence,
+            count(l.evidence_id)::bigint as evidence_count,
+            c.created_at
+          from claims c
+          join projects p on p.id = c.project_id
+          left join claim_evidence_links l on l.claim_id = c.id
+          where ($1::text is null or c.status = $1)
+            and ($2::text is null or c.claim_type = $2)
+            and ($3::uuid is null or c.project_id = $3)
+          group by c.id, p.name
+        )
+        select *, count(*) over()::bigint as total_count
+        from claim_rows
+        order by created_at desc
+        limit $4
+        offset $5
         "#,
     )
+    .bind(&filters.status)
+    .bind(&filters.claim_type)
+    .bind(filters.project_id)
+    .bind(limit + 1)
+    .bind(offset)
     .fetch_all(pool)
-    .await?)
+    .await?;
+
+    let total = rows.first().map_or(0, |row| row.total_count);
+    let limit_usize = usize::try_from(limit).unwrap_or(100);
+    let has_next = rows.len() > limit_usize;
+    let items = rows
+        .into_iter()
+        .take(limit_usize)
+        .map(|row| GlobalClaim {
+            id: row.id,
+            project_id: row.project_id,
+            project_name: row.project_name,
+            claim_text: row.claim_text,
+            claim_type: row.claim_type,
+            status: row.status,
+            confidence: row.confidence,
+            evidence_count: row.evidence_count,
+            created_at: row.created_at,
+        })
+        .collect();
+
+    Ok(PaginatedResponse {
+        items,
+        next_cursor: has_next.then(|| (offset + limit).to_string()),
+        total,
+    })
 }
 
 pub async fn reverify_claim(
@@ -544,11 +611,16 @@ async fn project_exists(pool: &PgPool, project_id: Uuid) -> AppResult<bool> {
     Ok(exists)
 }
 
-async fn evidence_documents(pool: &PgPool, project_id: Uuid) -> AppResult<Vec<EvidenceDocument>> {
+async fn evidence_documents(
+    pool: &PgPool,
+    project_id: Uuid,
+    limit: i64,
+) -> AppResult<Vec<EvidenceDocument>> {
     Ok(sqlx::query_as::<_, EvidenceDocument>(
-        "select id, project_id, evidence_type, title, summary, source_uri, uploaded_by, effective_date, created_at from evidence_documents where project_id = $1 order by created_at desc",
+        "select id, project_id, evidence_type, title, summary, source_uri, uploaded_by, effective_date, created_at from evidence_documents where project_id = $1 order by created_at desc limit $2",
     )
     .bind(project_id)
+    .bind(limit)
     .fetch_all(pool)
     .await?)
 }
@@ -593,27 +665,44 @@ async fn claims_with_evidence(
     project_id: Uuid,
 ) -> AppResult<Vec<ClaimWithEvidence>> {
     let claims = sqlx::query_as::<_, Claim>(
-        "select id, project_id, claim_text, claim_type, status, confidence::float8 as confidence, generated_by, created_at from claims where project_id = $1 order by created_at desc",
+        "select id, project_id, claim_text, claim_type, status, confidence::float8 as confidence, generated_by, created_at from claims where project_id = $1 order by created_at desc limit 100",
     )
     .bind(project_id)
     .fetch_all(pool)
     .await?;
 
-    let mut result = Vec::with_capacity(claims.len());
-    for claim in claims {
-        let evidence = sqlx::query_as::<_, LinkedEvidence>(
+    let claim_ids: Vec<Uuid> = claims.iter().map(|claim| claim.id).collect();
+    let evidence_rows = if claim_ids.is_empty() {
+        Vec::new()
+    } else {
+        sqlx::query_as::<_, LinkedEvidenceRow>(
             r#"
-            select e.id, e.title, e.evidence_type, l.support_type
+            select l.claim_id, e.id, e.title, e.evidence_type, l.support_type
             from claim_evidence_links l
             join evidence_documents e on e.id = l.evidence_id
-            where l.claim_id = $1
+            where l.claim_id = any($1)
             order by e.created_at desc
             "#,
         )
-        .bind(claim.id)
+        .bind(&claim_ids)
         .fetch_all(pool)
-        .await?;
+        .await?
+    };
+    let mut evidence_by_claim: HashMap<Uuid, Vec<LinkedEvidence>> = HashMap::new();
+    for row in evidence_rows {
+        evidence_by_claim
+            .entry(row.claim_id)
+            .or_default()
+            .push(LinkedEvidence {
+                id: row.id,
+                title: row.title,
+                evidence_type: row.evidence_type,
+                support_type: row.support_type,
+            });
+    }
 
+    let mut result = Vec::with_capacity(claims.len());
+    for claim in claims {
         result.push(ClaimWithEvidence {
             id: claim.id,
             project_id: claim.project_id,
@@ -623,11 +712,22 @@ async fn claims_with_evidence(
             confidence: claim.confidence,
             generated_by: claim.generated_by,
             created_at: claim.created_at,
-            evidence,
+            evidence: evidence_by_claim.remove(&claim.id).unwrap_or_default(),
         });
     }
 
     Ok(result)
+}
+
+fn normalized_limit(limit: Option<i64>) -> i64 {
+    limit.unwrap_or(50).clamp(1, 100)
+}
+
+fn cursor_offset(cursor: Option<&str>) -> i64 {
+    cursor
+        .and_then(|raw| raw.parse::<i64>().ok())
+        .unwrap_or(0)
+        .max(0)
 }
 
 async fn evaluate_existing_claim(

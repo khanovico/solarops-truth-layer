@@ -13,10 +13,13 @@ pub struct AiClient {
 }
 
 impl AiClient {
-    pub fn new(base_url: String) -> Self {
+    pub fn new(base_url: impl AsRef<str>) -> Self {
         Self {
-            base_url: base_url.trim_end_matches('/').to_owned(),
-            http: reqwest::Client::new(),
+            base_url: base_url.as_ref().trim_end_matches('/').to_owned(),
+            http: reqwest::Client::builder()
+                .timeout(std::time::Duration::from_secs(10))
+                .build()
+                .expect("AI HTTP client builds"),
         }
     }
 
@@ -162,16 +165,29 @@ pub struct AiClaim {
 }
 
 impl AiAnswer {
-    pub fn validate_against_project(mut self, detail: &ProjectDetail) -> Self {
+    pub fn validate_against_project(mut self, detail: &ProjectDetail) -> AppResult<Self> {
+        if self.claims.is_empty() || self.recommended_next_actions.is_empty() {
+            return Err(AppError::AiResponseInvalid);
+        }
+        if !(0.0..=1.0).contains(&self.overall_confidence) {
+            return Err(AppError::AiResponseInvalid);
+        }
+
         let allowed_evidence: std::collections::HashSet<Uuid> =
             detail.evidence.iter().map(|e| e.id).collect();
 
         for claim in &mut self.claims {
+            if !is_valid_claim_status(&claim.status)
+                || !is_valid_claim_type(&claim.claim_type)
+                || !(0.0..=1.0).contains(&claim.confidence)
+            {
+                return Err(AppError::AiResponseInvalid);
+            }
             claim
                 .evidence_ids
                 .retain(|evidence_id| allowed_evidence.contains(evidence_id));
             if claim.status == "verified" && claim.evidence_ids.is_empty() {
-                claim.status = "missing_evidence".to_owned();
+                "missing_evidence".clone_into(&mut claim.status);
                 claim.confidence = claim.confidence.min(0.4);
                 if claim.missing_evidence.is_empty() {
                     claim.missing_evidence.push("linked_evidence".to_owned());
@@ -179,6 +195,27 @@ impl AiAnswer {
             }
         }
 
-        self
+        Ok(self)
     }
+}
+
+fn is_valid_claim_status(status: &str) -> bool {
+    matches!(
+        status,
+        "verified" | "assumption" | "missing_evidence" | "contradicted"
+    )
+}
+
+fn is_valid_claim_type(claim_type: &str) -> bool {
+    matches!(
+        claim_type,
+        "financial"
+            | "rebate"
+            | "tax"
+            | "installation"
+            | "asset"
+            | "schedule"
+            | "risk"
+            | "readiness"
+    )
 }

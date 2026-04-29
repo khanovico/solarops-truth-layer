@@ -43,6 +43,15 @@ pub fn rebate_secured(
     )
 }
 
+pub fn rebate_application_submitted(evidence: &[(Uuid, String)]) -> ClaimEvaluation {
+    let application_ids = evidence_ids(evidence, "rebate_application");
+    if application_ids.is_empty() {
+        return evaluation("missing_evidence", 0.2, vec![], vec!["rebate_application"]);
+    }
+
+    evaluation("verified", 0.95, application_ids, no_missing())
+}
+
 pub fn financing_ready(
     project: &ProjectRecord,
     evidence: &[(Uuid, String)],
@@ -158,6 +167,20 @@ pub fn evaluate_claim(
     milestones: &[Milestone],
 ) -> ClaimEvaluation {
     let text = claim_text.to_lowercase();
+    if (claim_type == "readiness" || text.contains("move") || text.contains("ready"))
+        && (has_open_high_blocker(blockers) || has_open_blocker_category(blockers, "data_conflict"))
+    {
+        return evaluation("contradicted", 0.1, vec![], no_missing());
+    }
+    if text.contains("rebate submission") || text.contains("move to rebate") {
+        if has_open_high_blocker(blockers) || has_open_blocker_category(blockers, "data_conflict") {
+            return evaluation("contradicted", 0.1, vec![], no_missing());
+        }
+        return rebate_application_submitted(evidence);
+    }
+    if text.contains("rebate") && (text.contains("submitted") || text.contains("application")) {
+        return rebate_application_submitted(evidence);
+    }
     if claim_type == "rebate" || text.contains("rebate") {
         return rebate_secured(project, evidence, blockers);
     }
@@ -265,8 +288,36 @@ mod tests {
     }
 
     #[test]
+    fn test_rebate_application_submitted_verified_with_application() {
+        let id = Uuid::new_v4();
+        let result = evaluate_claim(
+            "rebate",
+            "The rebate application has been submitted.",
+            &project(),
+            &[(id, "rebate_application".to_owned())],
+            &[],
+            &[],
+        );
+        assert_eq!(result.status, "verified");
+        assert_eq!(result.evidence_ids, vec![id]);
+    }
+
+    #[test]
     fn test_financing_readiness_blocked_by_high_severity_blocker() {
         let result = financing_ready(&project(), &[], &[blocker("data_conflict", "high")]);
+        assert_eq!(result.status, "contradicted");
+    }
+
+    #[test]
+    fn test_rebate_submission_readiness_contradicted_by_data_conflict() {
+        let result = evaluate_claim(
+            "readiness",
+            "Can this project move to rebate submission?",
+            &project(),
+            &[(Uuid::new_v4(), "rebate_application".to_owned())],
+            &[blocker("data_conflict", "high")],
+            &[],
+        );
         assert_eq!(result.status, "contradicted");
     }
 

@@ -465,7 +465,7 @@ export function askMockAi(projectId: string): AiAnswer {
   return makeAiAnswer(project);
 }
 
-export function addMockEvidence(projectId: string, evidenceType: string): Evidence {
+export function addMockEvidence(projectId: string, evidenceType: string): ProjectDetail {
   const project = getMockProjectDetail(projectId);
   const newEvidence: Evidence = {
     id: `ev-${projectId}-${Date.now()}`,
@@ -489,7 +489,7 @@ export function addMockEvidence(projectId: string, evidenceType: string): Eviden
     activity_log: [activity, ...project.activity_log],
   };
   syncStore();
-  return newEvidence;
+  return getMockProjectDetail(projectId);
 }
 
 export function resolveMockBlocker(projectId: string, blockerId: string) {

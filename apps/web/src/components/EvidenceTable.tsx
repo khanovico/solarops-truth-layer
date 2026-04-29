@@ -5,9 +5,10 @@ import type { Evidence } from "../lib/types";
 type EvidenceTableProps = {
   evidence: Evidence[];
   onAddMockEvidence: (evidenceType: string) => Promise<void> | void;
+  isAdding?: boolean;
 };
 
-export function EvidenceTable({ evidence, onAddMockEvidence }: EvidenceTableProps) {
+export function EvidenceTable({ evidence, onAddMockEvidence, isAdding = false }: EvidenceTableProps) {
   const [filter, setFilter] = useState("all");
   const filteredEvidence = useMemo(() => {
     if (filter === "all") {
@@ -42,8 +43,9 @@ export function EvidenceTable({ evidence, onAddMockEvidence }: EvidenceTableProp
             type="button"
             className="button-secondary"
             onClick={() => onAddMockEvidence("rebate_award_letter")}
+            disabled={isAdding}
           >
-            Add mock evidence
+            {isAdding ? "Adding..." : "Add mock evidence"}
           </button>
         </div>
       </div>

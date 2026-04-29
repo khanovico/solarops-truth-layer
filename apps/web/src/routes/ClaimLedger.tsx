@@ -21,7 +21,7 @@ export function ClaimLedger() {
       setError(null);
 
       try {
-        const result = await api.getClaims();
+        const result = await api.getClaims({ status, claimType, projectId });
         if (!active) {
           return;
         }
@@ -43,7 +43,7 @@ export function ClaimLedger() {
     return () => {
       active = false;
     };
-  }, [api]);
+  }, [api, status, claimType, projectId]);
 
   const filteredClaims = useMemo(() => {
     return claims.filter((claim) => {

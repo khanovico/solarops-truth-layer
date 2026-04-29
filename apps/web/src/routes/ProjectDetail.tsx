@@ -24,6 +24,7 @@ export function ProjectDetail() {
   const [warning, setWarning] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [pendingAction, setPendingAction] = useState<string | null>(null);
   const [question, setQuestion] = useState("Is this project ready for financing review?");
 
   async function refreshProject() {
@@ -65,45 +66,78 @@ export function ProjectDetail() {
   }, [api, id]);
 
   async function handleAsk() {
-    const result = await api.askProjectAi(id, question);
-    setAnswer(result.data);
-    if (result.warning) {
-      setWarning(result.warning);
+    setPendingAction("ask");
+    try {
+      const result = await api.askProjectAi(id, question);
+      const linkedEvidenceIds = new Set(
+        result.data.claims.flatMap((claim) => claim.evidence_ids),
+      );
+      setAnswer({
+        ...result.data,
+        evidence_links: project?.evidence.filter((item) => linkedEvidenceIds.has(item.id)) ?? [],
+      });
+      if (result.warning) {
+        setWarning(result.warning);
+      }
+    } catch (askError) {
+      setError(askError instanceof Error ? askError.message : "AI service unavailable.");
+    } finally {
+      setPendingAction(null);
     }
   }
 
   async function handleAddMockEvidence(evidenceType: string) {
-    const result = await api.addMockEvidence(id, evidenceType);
-    if (result.warning) {
-      setWarning(result.warning);
+    setPendingAction(`evidence:${evidenceType}`);
+    try {
+      const result = await api.addMockEvidence(id, evidenceType);
+      if (result.warning) {
+        setWarning(result.warning);
+      }
+      setProject(result.data);
+    } catch (evidenceError) {
+      setError(evidenceError instanceof Error ? evidenceError.message : "Evidence upload failed.");
+    } finally {
+      setPendingAction(null);
     }
-    await refreshProject();
   }
 
   async function handleResolveBlocker(blockerId: string) {
-    const result = await api.resolveBlocker(id, blockerId);
-    if (result.warning) {
-      setWarning(result.warning);
+    setPendingAction(`blocker:${blockerId}`);
+    try {
+      const result = await api.resolveBlocker(id, blockerId);
+      if (result.warning) {
+        setWarning(result.warning);
+      }
+      await refreshProject();
+    } catch (blockerError) {
+      setError(blockerError instanceof Error ? blockerError.message : "Blocker update failed.");
+    } finally {
+      setPendingAction(null);
     }
-    await refreshProject();
   }
 
   async function handleReverifyClaim(claimId: string) {
-    const result = await api.reverifyClaim(id, claimId);
-    if (result.warning) {
-      setWarning(result.warning);
+    setPendingAction(`claim:${claimId}`);
+    try {
+      const result = await api.reverifyClaim(id, claimId);
+      if (result.warning) {
+        setWarning(result.warning);
+      }
+      setProject((current) =>
+        current
+          ? {
+              ...current,
+              claims: current.claims.map((claim) =>
+                claim.id === claimId ? result.data : claim,
+              ),
+            }
+          : current,
+      );
+    } catch (claimError) {
+      setError(claimError instanceof Error ? claimError.message : "Claim reverification failed.");
+    } finally {
+      setPendingAction(null);
     }
-    setProject((current) =>
-      current
-        ? {
-            ...current,
-            claims: current.claims.map((claim) =>
-              claim.id === claimId ? result.data : claim,
-            ),
-          }
-        : current,
-    );
-    await refreshProject();
   }
 
   if (isLoading) {
@@ -161,8 +195,16 @@ export function ProjectDetail() {
       </section>
 
       <MilestoneTimeline milestones={project.milestones} />
-      <BlockerPanel blockers={project.blockers} onResolve={handleResolveBlocker} />
-      <EvidenceTable evidence={project.evidence} onAddMockEvidence={handleAddMockEvidence} />
+      <BlockerPanel
+        blockers={project.blockers}
+        onResolve={handleResolveBlocker}
+        pendingBlockerId={pendingAction?.startsWith("blocker:") ? pendingAction.slice(8) : null}
+      />
+      <EvidenceTable
+        evidence={project.evidence}
+        onAddMockEvidence={handleAddMockEvidence}
+        isAdding={pendingAction?.startsWith("evidence:") ?? false}
+      />
       <AssetTable assets={project.assets} />
 
       <section className="panel">
@@ -195,8 +237,13 @@ export function ProjectDetail() {
               </button>
             ))}
           </div>
-          <button type="button" className="button-primary" onClick={handleAsk}>
-            Ask question
+          <button
+            type="button"
+            className="button-primary"
+            onClick={handleAsk}
+            disabled={pendingAction === "ask"}
+          >
+            {pendingAction === "ask" ? "Asking..." : "Ask question"}
           </button>
         </div>
       </section>
@@ -239,8 +286,9 @@ export function ProjectDetail() {
                       type="button"
                       className="button-secondary"
                       onClick={() => handleReverifyClaim(claim.id)}
+                      disabled={pendingAction === `claim:${claim.id}`}
                     >
-                      Reverify
+                      {pendingAction === `claim:${claim.id}` ? "Reverifying..." : "Reverify"}
                     </button>
                   </td>
                 </tr>

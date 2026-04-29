@@ -86,6 +86,32 @@ def test_ai_response_matches_pydantic_schema() -> None:
     assert len(parsed.recommended_next_actions) >= 1
 
 
+def test_blocking_prompt_routes_to_blocker_answer() -> None:
+    project = _base_project()
+    project["blockers"] = [
+        {"id": "b1", "category": "data_conflict", "severity": "high", "status": "open"}
+    ]
+    payload = {"project": project, "question": "What is blocking this project?"}
+    resp = client.post("/ask", json=payload)
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["claims"][0]["claim_type"] == "risk"
+    assert body["claims"][0]["status"] == "contradicted"
+
+
+def test_rebate_submission_prompt_contradicted_by_data_conflict() -> None:
+    project = _base_project()
+    project["blockers"] = [
+        {"id": "b1", "category": "data_conflict", "severity": "high", "status": "open"}
+    ]
+    payload = {"project": project, "question": "Can this project move to rebate submission?"}
+    resp = client.post("/ask", json=payload)
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["claims"][0]["claim_type"] == "readiness"
+    assert body["claims"][0]["status"] == "contradicted"
+
+
 def test_health_endpoint_returns_expected_defaults() -> None:
     resp = client.get("/health")
     assert resp.status_code == 200

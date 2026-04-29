@@ -15,8 +15,10 @@ def answer_question(req: AskRequest) -> AiAnswer:
     project = req.project
     if "financing" in question or "financial" in question:
         return evaluate_financing_readiness(project)
-    if "blocked" in question or "blocker" in question:
+    if "blocking" in question or "blocked" in question or "blocker" in question or "block" in question:
         return explain_blockers(project)
+    if "rebate submission" in question or "move to rebate" in question:
+        return evaluate_rebate_submission_readiness(project)
     if "changed" in question or "this week" in question:
         return summarize_recent_activity(project)
     if "installation" in question or "install" in question:
@@ -118,6 +120,36 @@ def explain_blockers(project: ProjectContext) -> AiAnswer:
         overall_confidence=claims[0].confidence,
         claims=claims,
         recommended_next_actions=["Resolve high-severity blockers first."],
+    )
+    return enforce_answer_rules(answer)
+
+
+def evaluate_rebate_submission_readiness(project: ProjectContext) -> AiAnswer:
+    data_conflict = has_open_blocker_category(project.blockers, "data_conflict")
+    high_blocker = has_open_high_blocker(project.blockers)
+    status = "contradicted" if data_conflict or high_blocker else "missing_evidence"
+    missing = [] if status == "contradicted" else ["rebate_application"]
+    actions = (
+        ["Reconcile asset specifications before rebate submission."]
+        if data_conflict
+        else ["Upload rebate application and confirm required supporting evidence."]
+    )
+    claims = [
+        claim(
+            claim_text="Project can move to rebate submission.",
+            claim_type="readiness",
+            status=status,
+            confidence=0.15 if status == "contradicted" else 0.35,
+            evidence_ids=[],
+            missing_evidence=missing,
+            reasoning_summary="High-severity data conflicts block rebate submission readiness.",
+        )
+    ]
+    answer = AiAnswer(
+        answer_markdown="Rebate submission readiness checked against blockers and evidence.",
+        overall_confidence=claims[0].confidence,
+        claims=claims,
+        recommended_next_actions=actions,
     )
     return enforce_answer_rules(answer)
 

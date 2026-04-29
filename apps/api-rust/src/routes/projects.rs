@@ -8,7 +8,9 @@ use uuid::Uuid;
 use crate::{
     AppState,
     db::{
-        models::{ProjectDetail, ProjectFilters, ProjectSummary, StageUpdateRequest},
+        models::{
+            PaginatedResponse, ProjectDetail, ProjectFilters, ProjectSummary, StageUpdateRequest,
+        },
         queries,
     },
     error::AppResult,
@@ -24,7 +26,7 @@ pub fn router() -> Router<AppState> {
 async fn list_projects(
     State(state): State<AppState>,
     Query(filters): Query<ProjectFilters>,
-) -> AppResult<Json<Vec<ProjectSummary>>> {
+) -> AppResult<Json<PaginatedResponse<ProjectSummary>>> {
     Ok(Json(queries::list_projects(&state.pool, &filters).await?))
 }
 
