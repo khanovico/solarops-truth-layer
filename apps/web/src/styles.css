@@ -236,6 +236,19 @@ a {
   background: var(--panel-muted);
 }
 
+.inline-status {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 5px 10px;
+  border: 1px solid #bfdbfe;
+  border-radius: 999px;
+  color: #1d4ed8;
+  background: #eff6ff;
+  font-size: 0.82rem;
+  font-weight: 650;
+}
+
 .state-error {
   background: var(--red-soft);
   color: var(--red);

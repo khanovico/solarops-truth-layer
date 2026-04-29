@@ -84,11 +84,14 @@ export function ClaimLedger() {
     });
   }, [claimType, claims, projectId, status]);
 
-  if (isLoading) {
+  const isInitialLoading = isLoading && !claimPage;
+  const hasInitialError = error && !claimPage;
+
+  if (isInitialLoading) {
     return <div className="state-panel">Loading claim ledger…</div>;
   }
 
-  if (error) {
+  if (hasInitialError) {
     return <div className="state-panel state-error">Claim error: {error}</div>;
   }
 
@@ -174,7 +177,9 @@ export function ClaimLedger() {
               {claimPage ? ` Showing ${claims.length} of ${claimPage.total}.` : ""}
             </p>
           </div>
+          {isLoading ? <span className="inline-status">Updating…</span> : null}
         </div>
+        {error ? <div className="notice-banner state-error">Claim refresh failed: {error}</div> : null}
         {filteredClaims.length === 0 ? (
           <div className="empty-state">No claims match the current filters.</div>
         ) : (

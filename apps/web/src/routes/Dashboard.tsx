@@ -140,11 +140,14 @@ export function Dashboard() {
     setSearchParams(next);
   }
 
-  if (isLoading) {
+  const isInitialLoading = isLoading && !portfolio;
+  const hasInitialError = error && !portfolio;
+
+  if (isInitialLoading) {
     return <div className="state-panel">Loading portfolio console…</div>;
   }
 
-  if (error) {
+  if (hasInitialError) {
     return <div className="state-panel state-error">Dashboard error: {error}</div>;
   }
 
@@ -265,7 +268,9 @@ export function Dashboard() {
               {projectPage ? ` Showing ${projects.length} of ${projectPage.total}.` : ""}
             </p>
           </div>
+          {isLoading ? <span className="inline-status">Updating…</span> : null}
         </div>
+        {error ? <div className="notice-banner state-error">Dashboard refresh failed: {error}</div> : null}
         {filteredProjects.length === 0 ? (
           <div className="empty-state">No projects match the current filters.</div>
         ) : (
