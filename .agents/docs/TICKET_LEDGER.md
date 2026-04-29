@@ -9,7 +9,7 @@ Status values: `todo`, `in_progress`, `review`, `done`, `blocked`.
 | T2 | done | Core project operations: Rust project queries, portfolio/list/detail endpoints, dashboard and detail browse UI | Rust domain/API compile tests; frontend component/query tests; build | d647c36, 03c74d2, 2c13200 |
 | T3 | done | Evidence, claim, blocker, and activity layer | Rust deterministic claim tests; Python AI tests; frontend ledger/action tests | d647c36, 2c13200 |
 | T4 | done | AI assistant: Python mock AI, Rust proxy/validation/persistence, frontend assistant | Python mock tests; Rust AI client compile; frontend AI missing-evidence test | d647c36, 03c74d2, 2c13200 |
-| T5 | done | Polish, docs, full validation, self-review, scalability review | Rust fmt/test/clippy; Python tests; frontend tests/build/audit; `docker compose config`; reviewer findings resolved | 14c71c3 |
+| T5 | done | Polish, docs, full validation, self-review, scalability review | Rust fmt/test/clippy; Python tests; frontend tests/build/audit; `docker compose config`; reviewer findings resolved | 14c71c3, 18da86f |
 
 ## Batch Plan
 
