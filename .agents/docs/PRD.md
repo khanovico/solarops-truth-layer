@@ -154,4 +154,4 @@
   - T2 core project operations are implemented.
   - T3 evidence, claims, blockers, and activity layer is implemented.
   - T4 AI assistant is implemented.
-  - T5 final polish, validation, and review is in progress.
+  - T5 final polish, validation, and review is complete.

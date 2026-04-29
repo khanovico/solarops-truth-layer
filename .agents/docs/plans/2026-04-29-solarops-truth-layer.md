@@ -127,4 +127,4 @@ Interaction thesis:
 - [x] T2 implemented, tested, documented, committed (`d647c36`, `03c74d2`, `2c13200`).
 - [x] T3 implemented, tested, documented, committed (`d647c36`, `2c13200`).
 - [x] T4 implemented, tested, documented, committed (`d647c36`, `03c74d2`, `2c13200`).
-- [ ] T5 validation/review/docs complete and committed.
+- [x] T5 validation/review/docs complete and committed (`14c71c3`).
