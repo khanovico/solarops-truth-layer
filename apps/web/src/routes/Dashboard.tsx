@@ -4,7 +4,12 @@ import { ProjectHealthCard } from "../components/ProjectHealthCard";
 import { ProjectStageBadge } from "../components/ProjectStageBadge";
 import { formatCurrency, formatDate } from "../lib/format";
 import { useApi } from "../lib/api-context";
-import type { DashboardFilters, PortfolioHealth, ProjectSummary } from "../lib/types";
+import type {
+  DashboardFilters,
+  PaginatedResponse,
+  PortfolioHealth,
+  ProjectSummary,
+} from "../lib/types";
 
 const defaultFilters: DashboardFilters = {
   stage: "",
@@ -22,9 +27,11 @@ export function Dashboard() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [portfolio, setPortfolio] = useState<PortfolioHealth | null>(null);
   const [projects, setProjects] = useState<ProjectSummary[]>([]);
+  const [projectPage, setProjectPage] = useState<PaginatedResponse<ProjectSummary> | null>(null);
   const [warning, setWarning] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
   const filterKey = searchParams.toString();
 
   const filters: DashboardFilters = {
@@ -52,7 +59,8 @@ export function Dashboard() {
         }
 
         setPortfolio(portfolioResult.data);
-        setProjects(projectsResult.data);
+        setProjectPage(projectsResult.data);
+        setProjects(projectsResult.data.items);
         setWarning(portfolioResult.warning ?? projectsResult.warning ?? null);
       } catch (loadError) {
         if (!active) {
@@ -72,6 +80,27 @@ export function Dashboard() {
       active = false;
     };
   }, [api, filterKey]);
+
+  async function loadMoreProjects() {
+    if (!projectPage?.next_cursor) {
+      return;
+    }
+
+    setIsLoadingMore(true);
+    setError(null);
+    try {
+      const result = await api.getProjects(filters, projectPage.next_cursor);
+      setProjectPage(result.data);
+      setProjects((current) => [...current, ...result.data.items]);
+      if (result.warning) {
+        setWarning(result.warning);
+      }
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : "Project page failed to load.");
+    } finally {
+      setIsLoadingMore(false);
+    }
+  }
 
   const owners = Array.from(new Set(projects.map((project) => project.owner_name)));
 
@@ -213,7 +242,10 @@ export function Dashboard() {
         <div className="panel-header">
           <div>
             <h3>Projects</h3>
-            <p>Execution table for owners, blockers, missing evidence, and target COD.</p>
+            <p>
+              Execution table for owners, blockers, missing evidence, and target COD.
+              {projectPage ? ` Showing ${projects.length} of ${projectPage.total}.` : ""}
+            </p>
           </div>
         </div>
         {filteredProjects.length === 0 ? (
@@ -260,6 +292,18 @@ export function Dashboard() {
             </tbody>
           </table>
         )}
+        {projectPage?.next_cursor ? (
+          <div className="table-footer">
+            <button
+              type="button"
+              className="button-secondary"
+              onClick={loadMoreProjects}
+              disabled={isLoadingMore}
+            >
+              {isLoadingMore ? "Loading..." : "Load more projects"}
+            </button>
+          </div>
+        ) : null}
       </section>
 
       <section className="panel">

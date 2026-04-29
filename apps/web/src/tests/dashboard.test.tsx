@@ -8,11 +8,13 @@ import type {
   AiAnswer,
   Claim,
   Evidence,
+  PaginatedResponse,
   PortfolioHealth,
   ProjectDetail,
   ProjectSummary,
 } from "../lib/types";
 import { ClaimStatusBadge } from "../components/ClaimStatusBadge";
+import { ClaimLedger } from "../routes/ClaimLedger";
 import { Dashboard } from "../routes/Dashboard";
 import { ProjectDetail as ProjectDetailRoute } from "../routes/ProjectDetail";
 
@@ -107,6 +109,14 @@ const projectDetail: ProjectDetail = {
   activity_log: [],
 };
 
+function page<T>(items: T[], nextCursor: string | null = null, total = items.length): PaginatedResponse<T> {
+  return {
+    items,
+    next_cursor: nextCursor,
+    total,
+  };
+}
+
 function renderWithApi(
   ui: ReactNode,
   overrides?: Partial<ReturnType<typeof createApiClient>>,
@@ -114,9 +124,9 @@ function renderWithApi(
 ) {
   const api = {
     getPortfolioHealth: async () => ({ data: portfolio }),
-    getProjects: async () => ({ data: projects }),
+    getProjects: async () => ({ data: page(projects) }),
     getProject: async () => ({ data: projectDetail }),
-    getClaims: async () => ({ data: claims }),
+    getClaims: async () => ({ data: page(claims) }),
     askProjectAi: async () => ({ data: answer }),
     addMockEvidence: async () => ({ data: projectDetail }),
     resolveBlocker: async () => ({ data: { ok: true } }),
@@ -153,9 +163,51 @@ test("renders_project_health_badges", async () => {
   expect(within(table!).getByText("green")).toBeInTheDocument();
 });
 
+test("loads_more_projects_when_next_page_exists", async () => {
+  const nextProject: ProjectSummary = {
+    ...projects[1],
+    id: "charlie",
+    name: "Project Charlie",
+  };
+  const getProjects = vi.fn(async (_filters: unknown, cursor?: string | null) => ({
+    data: cursor === "2" ? page([nextProject], null, 3) : page(projects, "2", 3),
+  }));
+
+  renderWithApi(<Dashboard />, { getProjects });
+
+  expect(await screen.findByText(/Showing 2 of 3/)).toBeInTheDocument();
+  await userEvent.click(screen.getByRole("button", { name: "Load more projects" }));
+
+  expect(await screen.findByText("Project Charlie")).toBeInTheDocument();
+  expect(screen.getByText(/Showing 3 of 3/)).toBeInTheDocument();
+  expect(getProjects).toHaveBeenLastCalledWith(expect.any(Object), "2");
+});
+
 test("renders_claim_status_badges", () => {
   render(<ClaimStatusBadge status="missing_evidence" />);
   expect(screen.getByText("Missing Evidence")).toBeInTheDocument();
+});
+
+test("loads_more_claims_when_next_page_exists", async () => {
+  const nextClaim: Claim = {
+    ...claims[0],
+    id: "claim-2",
+    claim_text: "Installation can start.",
+    claim_type: "installation",
+    status: "missing_evidence",
+  };
+  const getClaims = vi.fn(async (_filters: unknown, cursor?: string | null) => ({
+    data: cursor === "1" ? page([nextClaim], null, 2) : page(claims, "1", 2),
+  }));
+
+  renderWithApi(<ClaimLedger />, { getClaims });
+
+  expect(await screen.findByText(/Showing 1 of 2/)).toBeInTheDocument();
+  await userEvent.click(screen.getByRole("button", { name: "Load more claims" }));
+
+  expect(await screen.findByText("Installation can start.")).toBeInTheDocument();
+  expect(screen.getByText(/Showing 2 of 2/)).toBeInTheDocument();
+  expect(getClaims).toHaveBeenLastCalledWith(expect.any(Object), "1");
 });
 
 test("renders_ai_missing_evidence", async () => {

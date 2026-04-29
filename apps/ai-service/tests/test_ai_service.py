@@ -77,6 +77,40 @@ def test_high_blocker_prevents_readiness_approval() -> None:
     assert readiness["status"] == "contradicted"
 
 
+def test_installation_readiness_requires_equipment_ordered_milestone() -> None:
+    project = _base_project()
+    project["evidence"] = [
+        {"id": "permit", "type": "permit_approval", "status": "approved"},
+        {"id": "interconnection", "type": "interconnection_approval", "status": "approved"},
+    ]
+    payload = {"project": project, "question": "Can installation start?"}
+    resp = client.post("/ask", json=payload)
+    assert resp.status_code == 200
+    body = resp.json()
+    install_claim = body["claims"][0]
+    assert install_claim["status"] == "missing_evidence"
+    assert "equipment_ordered" in install_claim["missing_evidence"]
+
+
+def test_installation_readiness_contradicted_by_open_delay_blocker() -> None:
+    project = _base_project()
+    project["evidence"] = [
+        {"id": "permit", "type": "permit_approval", "status": "approved"},
+        {"id": "interconnection", "type": "interconnection_approval", "status": "approved"},
+    ]
+    project["milestones"] = [{"milestone_type": "equipment_ordered", "status": "complete"}]
+    project["blockers"] = [
+        {"id": "b1", "category": "interconnection_delay", "severity": "medium", "status": "open"}
+    ]
+    payload = {"project": project, "question": "Can installation start?"}
+    resp = client.post("/ask", json=payload)
+    assert resp.status_code == 200
+    body = resp.json()
+    install_claim = body["claims"][0]
+    assert install_claim["status"] == "contradicted"
+    assert install_claim["evidence_ids"] == []
+
+
 def test_ai_response_matches_pydantic_schema() -> None:
     payload = {"project": _base_project(), "question": "Is this project blocked?"}
     resp = client.post("/ask", json=payload)

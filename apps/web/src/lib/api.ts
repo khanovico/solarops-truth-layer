@@ -16,6 +16,7 @@ import type {
   ClaimsFilters,
   DashboardFilters,
   Evidence,
+  PaginatedResponse,
   PortfolioHealth,
   ProjectDetail,
   ProjectSummary,
@@ -41,10 +42,14 @@ function getApiBaseUrl() {
 }
 
 function shouldUseFallback() {
+  if (typeof import.meta === "undefined" || !import.meta.env) {
+    return false;
+  }
+
   return (
-    typeof import.meta !== "undefined" &&
-    import.meta.env &&
-    import.meta.env.VITE_ENABLE_MOCK_FALLBACK !== "false"
+    import.meta.env.VITE_ENABLE_MOCK_FALLBACK === "true" ||
+    import.meta.env.DEV ||
+    import.meta.env.MODE === "test"
   );
 }
 
@@ -87,24 +92,35 @@ export function createApiClient(fetchImpl: FetchLike = fetch) {
     return { ...result, data: normalizeClaim(result.data) };
   }
 
-  function projectListItems(input: unknown): ProjectSummary[] {
+  function projectListPage(input: unknown): PaginatedResponse<ProjectSummary> {
     if (Array.isArray(input)) {
-      return input as ProjectSummary[];
+      const items = input as ProjectSummary[];
+      return { items, next_cursor: null, total: items.length };
     }
     if (input && typeof input === "object" && "items" in input) {
-      return (input as { items: ProjectSummary[] }).items;
+      const page = input as Partial<PaginatedResponse<ProjectSummary>>;
+      return {
+        items: page.items ?? [],
+        next_cursor: page.next_cursor ?? null,
+        total: page.total ?? page.items?.length ?? 0,
+      };
     }
-    return [];
+    return { items: [], next_cursor: null, total: 0 };
   }
 
-  function claimsItems(input: unknown): unknown[] {
+  function claimsPage(input: unknown): PaginatedResponse<unknown> {
     if (Array.isArray(input)) {
-      return input;
+      return { items: input, next_cursor: null, total: input.length };
     }
     if (input && typeof input === "object" && "items" in input) {
-      return (input as { items: unknown[] }).items;
+      const page = input as Partial<PaginatedResponse<unknown>>;
+      return {
+        items: page.items ?? [],
+        next_cursor: page.next_cursor ?? null,
+        total: page.total ?? page.items?.length ?? 0,
+      };
     }
-    return [];
+    return { items: [], next_cursor: null, total: 0 };
   }
 
   return {
@@ -116,8 +132,11 @@ export function createApiClient(fetchImpl: FetchLike = fetch) {
       });
       return { ...result, data: normalizePortfolioHealth(result.data) };
     },
-    async getProjects(filters?: DashboardFilters) {
+    async getProjects(filters?: DashboardFilters, cursor?: string | null) {
       const params = new URLSearchParams({ limit: "100" });
+      if (cursor) {
+        params.set("cursor", cursor);
+      }
       if (filters?.stage) {
         params.set("stage", filters.stage);
       }
@@ -135,7 +154,7 @@ export function createApiClient(fetchImpl: FetchLike = fetch) {
         fallback: getMockProjects,
         warning: "Live project list unavailable. Showing seeded fallback data.",
       });
-      return { ...result, data: projectListItems(result.data) };
+      return { ...result, data: projectListPage(result.data) };
     },
     async getProject(projectId: string) {
       const result = await request<unknown>(`/projects/${projectId}`, {
@@ -145,8 +164,11 @@ export function createApiClient(fetchImpl: FetchLike = fetch) {
       });
       return { ...result, data: normalizeProjectDetail(result.data) };
     },
-    async getClaims(filters?: ClaimsFilters) {
+    async getClaims(filters?: ClaimsFilters, cursor?: string | null) {
       const params = new URLSearchParams({ limit: "100" });
+      if (cursor) {
+        params.set("cursor", cursor);
+      }
       if (filters?.status) {
         params.set("status", filters.status);
       }
@@ -161,7 +183,14 @@ export function createApiClient(fetchImpl: FetchLike = fetch) {
         fallback: getMockClaims,
         warning: "Live claim ledger unavailable. Showing seeded fallback data.",
       });
-      return { ...result, data: claimsItems(result.data).map((claim) => normalizeClaim(claim)) };
+      const page = claimsPage(result.data);
+      return {
+        ...result,
+        data: {
+          ...page,
+          items: page.items.map((claim) => normalizeClaim(claim)),
+        },
+      };
     },
     async askProjectAi(projectId: string, question: string) {
       const result = await request<unknown>(`/projects/${projectId}/ai/ask`, {

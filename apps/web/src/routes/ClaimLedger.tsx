@@ -1,14 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
 import { ClaimStatusBadge } from "../components/ClaimStatusBadge";
 import { useApi } from "../lib/api-context";
-import type { Claim } from "../lib/types";
+import type { Claim, PaginatedResponse } from "../lib/types";
 
 export function ClaimLedger() {
   const api = useApi();
   const [claims, setClaims] = useState<Claim[]>([]);
+  const [claimPage, setClaimPage] = useState<PaginatedResponse<Claim> | null>(null);
   const [warning, setWarning] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [status, setStatus] = useState("");
   const [claimType, setClaimType] = useState("");
   const [projectId, setProjectId] = useState("");
@@ -25,7 +27,8 @@ export function ClaimLedger() {
         if (!active) {
           return;
         }
-        setClaims(result.data);
+        setClaimPage(result.data);
+        setClaims(result.data.items);
         setWarning(result.warning ?? null);
       } catch (loadError) {
         if (!active) {
@@ -44,6 +47,27 @@ export function ClaimLedger() {
       active = false;
     };
   }, [api, status, claimType, projectId]);
+
+  async function loadMoreClaims() {
+    if (!claimPage?.next_cursor) {
+      return;
+    }
+
+    setIsLoadingMore(true);
+    setError(null);
+    try {
+      const result = await api.getClaims({ status, claimType, projectId }, claimPage.next_cursor);
+      setClaimPage(result.data);
+      setClaims((current) => [...current, ...result.data.items]);
+      if (result.warning) {
+        setWarning(result.warning);
+      }
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : "Claim page failed to load.");
+    } finally {
+      setIsLoadingMore(false);
+    }
+  }
 
   const filteredClaims = useMemo(() => {
     return claims.filter((claim) => {
@@ -131,7 +155,10 @@ export function ClaimLedger() {
         <div className="panel-header">
           <div>
             <h3>Claim ledger</h3>
-            <p>Missing evidence claims remain visually obvious. Contradictions stay urgent.</p>
+            <p>
+              Missing evidence claims remain visually obvious. Contradictions stay urgent.
+              {claimPage ? ` Showing ${claims.length} of ${claimPage.total}.` : ""}
+            </p>
           </div>
         </div>
         {filteredClaims.length === 0 ? (
@@ -166,6 +193,18 @@ export function ClaimLedger() {
             </tbody>
           </table>
         )}
+        {claimPage?.next_cursor ? (
+          <div className="table-footer">
+            <button
+              type="button"
+              className="button-secondary"
+              onClick={loadMoreClaims}
+              disabled={isLoadingMore}
+            >
+              {isLoadingMore ? "Loading..." : "Load more claims"}
+            </button>
+          </div>
+        ) : null}
       </section>
     </div>
   );

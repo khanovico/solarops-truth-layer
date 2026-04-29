@@ -44,7 +44,7 @@ Services:
 
 The Rust API runs SQLx migrations on startup. `001_init.sql` creates the schema and `002_seed.sql` loads the deterministic Project A-E demo portfolio.
 
-The web app defaults to demo-safe fallback data if the API is unavailable. Set `VITE_ENABLE_MOCK_FALLBACK=false` to surface live API errors instead.
+The web app uses demo-safe fallback data during local dev and tests. Production builds surface live API errors unless `VITE_ENABLE_MOCK_FALLBACK=true` is set explicitly for a demo environment.
 
 ## Demo Workflows
 
@@ -88,7 +88,7 @@ Errors use:
 - `missing_evidence`: required proof is absent.
 - `contradicted`: blockers or records conflict with the claim.
 
-The Rust API downgrades AI `verified` claims that do not include evidence IDs from the current project.
+The Rust API rechecks AI claims with deterministic project rules before persistence, including evidence ownership, blocker conflicts, and required readiness milestones.
 
 ## Test Commands
 

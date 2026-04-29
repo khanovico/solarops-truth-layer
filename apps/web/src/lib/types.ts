@@ -170,6 +170,12 @@ export type ClaimsFilters = {
   projectId: string;
 };
 
+export type PaginatedResponse<T> = {
+  items: T[];
+  next_cursor: string | null;
+  total: number;
+};
+
 export type ApiResult<T> = {
   data: T;
   warning?: string;

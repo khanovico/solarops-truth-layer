@@ -225,6 +225,12 @@ a {
   align-items: end;
 }
 
+.table-footer {
+  display: flex;
+  justify-content: center;
+  padding-top: 16px;
+}
+
 .filters-grid {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }

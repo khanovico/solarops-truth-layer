@@ -7,6 +7,7 @@ from app.verification_helpers import (
     has_evidence,
     has_open_blocker_category,
     has_open_high_blocker,
+    milestone_complete,
 )
 
 
@@ -179,25 +180,35 @@ def summarize_recent_activity(project: ProjectContext) -> AiAnswer:
 def evaluate_installation_readiness(project: ProjectContext) -> AiAnswer:
     permit_ids = has_evidence(project, "permit_approval")
     interconnect_ids = has_evidence(project, "interconnection_approval")
-    has_high = has_open_high_blocker(project.blockers)
+    has_blocking_delay = (
+        has_open_high_blocker(project.blockers)
+        or has_open_blocker_category(project.blockers, "permit_delay")
+        or has_open_blocker_category(project.blockers, "interconnection_delay")
+    )
+    equipment_ordered = milestone_complete(project, "equipment_ordered")
     missing = []
     if not permit_ids:
         missing.append("permit_approval")
     if not interconnect_ids:
         missing.append("interconnection_approval")
+    if not equipment_ordered:
+        missing.append("equipment_ordered")
 
-    if has_high:
+    if has_blocking_delay:
         status = "contradicted"
         evidence_ids = []
-        confidence = 0.2
+        confidence = 0.15
+        reasoning = "Open permit or interconnection blocker prevents installation readiness."
     elif missing:
         status = "missing_evidence"
         evidence_ids = []
-        confidence = 0.3
+        confidence = 0.25
+        reasoning = "Permit approval, interconnection approval, and equipment ordered milestone are required."
     else:
         status = "verified"
         evidence_ids = permit_ids + interconnect_ids
         confidence = 0.9
+        reasoning = "Permit and interconnection approvals exist, equipment is ordered, and no delay blockers are open."
     claims = [
         claim(
             claim_text="Installation can start.",
@@ -206,7 +217,7 @@ def evaluate_installation_readiness(project: ProjectContext) -> AiAnswer:
             confidence=confidence,
             evidence_ids=evidence_ids,
             missing_evidence=missing,
-            reasoning_summary="Permit and interconnection approvals are required.",
+            reasoning_summary=reasoning,
         )
     ]
     answer = AiAnswer(

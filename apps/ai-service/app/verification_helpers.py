@@ -21,6 +21,16 @@ def has_open_blocker_category(blockers: list[Blocker], category: str) -> bool:
     return False
 
 
+def milestone_complete(project: ProjectContext, milestone_type: str) -> bool:
+    for milestone in project.milestones:
+        if (
+            milestone.get("milestone_type") == milestone_type
+            and milestone.get("status") == "complete"
+        ):
+            return True
+    return False
+
+
 def enforce_answer_rules(answer: AiAnswer) -> AiAnswer:
     # Triggers schema-level validators for contract guarantees.
     return AiAnswer.model_validate(answer.model_dump())

@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use serde_json::json;
-use sqlx::PgPool;
+use sqlx::{PgPool, Postgres, Transaction};
 use uuid::Uuid;
 
 use crate::{
@@ -788,36 +788,173 @@ async fn reverify_related_claims(
         "ppa_term_sheet" => vec!["financial", "readiness"],
         "permit_approval" | "interconnection_approval" => vec!["installation"],
         "monitoring_snapshot" => vec!["financial"],
-        _ => Vec::new(),
+        _ => return Ok(()),
     };
+    let mut tx = pool.begin().await?;
+    let snapshot = load_reverify_snapshot(&mut tx, project_id).await?;
+    let claims = claims_for_reverify(&mut tx, project_id, &claim_types).await?;
 
-    for claim_type in claim_types {
-        let claims = sqlx::query_as::<_, Claim>(
-            "select id, project_id, claim_text, claim_type, status, confidence::float8 as confidence, generated_by, created_at from claims where project_id = $1 and claim_type = $2",
-        )
-        .bind(project_id)
-        .bind(claim_type)
-        .fetch_all(pool)
-        .await?;
-
-        for claim in claims {
-            let evaluation = evaluate_existing_claim(pool, &claim).await?;
-            apply_claim_evaluation(pool, &claim, &evaluation).await?;
-            write_activity(
-                pool,
-                project_id,
-                "claim_reverified",
-                actor,
-                &format!(
-                    "Claim reverified after evidence upload: {}",
-                    claim.claim_text
-                ),
-                json!({ "claim_id": claim.id, "status": evaluation.status }),
-            )
-            .await?;
-        }
+    if claims.is_empty() {
+        tx.commit().await?;
+        return Ok(());
     }
 
+    for claim in claims {
+        let evaluation = claim_verification::evaluate_claim(
+            &claim.claim_type,
+            &claim.claim_text,
+            &snapshot.project,
+            &snapshot.evidence,
+            &snapshot.blockers,
+            &snapshot.milestones,
+        );
+
+        update_reverified_claim(&mut tx, project_id, actor, &claim, &evaluation).await?;
+    }
+    tx.commit().await?;
+
+    Ok(())
+}
+
+struct ReverifySnapshot {
+    project: ProjectRecord,
+    evidence: Vec<(Uuid, String)>,
+    blockers: Vec<Blocker>,
+    milestones: Vec<Milestone>,
+}
+
+async fn load_reverify_snapshot(
+    tx: &mut Transaction<'_, Postgres>,
+    project_id: Uuid,
+) -> AppResult<ReverifySnapshot> {
+    sqlx::query_scalar::<_, ()>(
+        "select pg_advisory_xact_lock(hashtextextended($1::text, 0::bigint))",
+    )
+    .bind(project_id.to_string())
+    .fetch_one(&mut **tx)
+    .await?;
+
+    let project = sqlx::query_as::<_, ProjectRecord>(
+        r#"
+        select
+          id,
+          name,
+          stage,
+          health,
+          system_size_kw_dc::float8 as system_size_kw_dc,
+          estimated_project_cost_usd::float8 as estimated_project_cost_usd,
+          estimated_annual_savings_usd::float8 as estimated_annual_savings_usd,
+          estimated_rebate_usd::float8 as estimated_rebate_usd,
+          financing_type,
+          ppa_term_years,
+          target_cod,
+          owner_name,
+          created_at,
+          updated_at
+        from projects
+        where id = $1
+        "#,
+    )
+    .bind(project_id)
+    .fetch_optional(&mut **tx)
+    .await?
+    .ok_or(AppError::ProjectNotFound)?;
+    let evidence = sqlx::query_as::<_, (Uuid, String)>(
+        "select id, evidence_type from evidence_documents where project_id = $1",
+    )
+    .bind(project_id)
+    .fetch_all(&mut **tx)
+    .await?;
+    let blockers = sqlx::query_as::<_, Blocker>(
+        r#"
+        select id, project_id, category, severity, title, description, owner_name, status, created_at, resolved_at
+        from blockers
+        where project_id = $1
+        order by
+          case when status = 'open' then 0 else 1 end,
+          case severity when 'high' then 0 when 'medium' then 1 else 2 end,
+          coalesce(resolved_at, created_at) desc
+        "#,
+    )
+    .bind(project_id)
+    .fetch_all(&mut **tx)
+    .await?;
+    let milestones = sqlx::query_as::<_, Milestone>(
+        "select id, project_id, milestone_type, status, planned_date, actual_date, owner_name, notes, created_at, updated_at from project_milestones where project_id = $1 order by planned_date nulls last, milestone_type",
+    )
+    .bind(project_id)
+    .fetch_all(&mut **tx)
+    .await?;
+
+    Ok(ReverifySnapshot {
+        project,
+        evidence,
+        blockers,
+        milestones,
+    })
+}
+
+async fn claims_for_reverify(
+    tx: &mut Transaction<'_, Postgres>,
+    project_id: Uuid,
+    claim_types: &[&str],
+) -> AppResult<Vec<Claim>> {
+    Ok(sqlx::query_as::<_, Claim>(
+        r#"
+        select id, project_id, claim_text, claim_type, status, confidence::float8 as confidence, generated_by, created_at
+        from claims
+        where project_id = $1 and claim_type = any($2)
+        "#,
+    )
+    .bind(project_id)
+    .bind(claim_types)
+    .fetch_all(&mut **tx)
+    .await?)
+}
+
+async fn update_reverified_claim(
+    tx: &mut Transaction<'_, Postgres>,
+    project_id: Uuid,
+    actor: &str,
+    claim: &Claim,
+    evaluation: &claim_verification::ClaimEvaluation,
+) -> AppResult<()> {
+    sqlx::query("update claims set status = $1, confidence = $2 where id = $3")
+        .bind(&evaluation.status)
+        .bind(evaluation.confidence)
+        .bind(claim.id)
+        .execute(&mut **tx)
+        .await?;
+
+    sqlx::query("delete from claim_evidence_links where claim_id = $1")
+        .bind(claim.id)
+        .execute(&mut **tx)
+        .await?;
+
+    for evidence_id in &evaluation.evidence_ids {
+        sqlx::query(
+            "insert into claim_evidence_links (claim_id, evidence_id, support_type) values ($1, $2, 'supports') on conflict do nothing",
+        )
+        .bind(claim.id)
+        .bind(evidence_id)
+        .execute(&mut **tx)
+        .await?;
+    }
+
+    sqlx::query(
+        "insert into activity_events (id, project_id, event_type, actor, description, metadata) values ($1, $2, $3, $4, $5, $6)",
+    )
+    .bind(Uuid::new_v4())
+    .bind(project_id)
+    .bind("claim_reverified")
+    .bind(actor)
+    .bind(format!(
+        "Claim reverified after evidence upload: {}",
+        claim.claim_text
+    ))
+    .bind(json!({ "claim_id": claim.id, "status": evaluation.status }))
+    .execute(&mut **tx)
+    .await?;
     Ok(())
 }
 
