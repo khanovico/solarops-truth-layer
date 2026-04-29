@@ -222,7 +222,7 @@ test("renders_ai_missing_evidence", async () => {
   await screen.findByText("Project Alpha");
   await userEvent.click(screen.getByRole("button", { name: "Ask question" }));
 
-  expect(await screen.findByText("Rebate award letter")).toBeInTheDocument();
+  expect(await screen.findByText("Rebate award letter", undefined, { timeout: 3000 })).toBeInTheDocument();
   expect(screen.getByText("Upload rebate award letter")).toBeInTheDocument();
 });
 

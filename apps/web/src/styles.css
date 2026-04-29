@@ -597,7 +597,7 @@ button:focus-visible {
 .assistant-panel {
   overflow: hidden;
   padding: 0;
-  border-color: #bfdbfe;
+  border-color: #b7c7dc;
 }
 
 .assistant-shell {
@@ -618,8 +618,8 @@ button:focus-visible {
   align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
-  background: linear-gradient(180deg, #eff6ff, #fff);
-  border-bottom: 1px solid #dbeafe;
+  background: #f7f9fc;
+  border-bottom: 1px solid #dbe3ef;
 }
 
 .assistant-title {
@@ -637,7 +637,7 @@ button:focus-visible {
   height: 34px;
   flex: 0 0 auto;
   border-radius: 999px;
-  background: var(--navy);
+  background: #162238;
   color: #fff;
   font-weight: 800;
 }
@@ -677,8 +677,8 @@ button:focus-visible {
 
 .assistant-body {
   display: grid;
-  gap: 16px;
-  background: #f8fafc;
+  gap: 18px;
+  background: #f6f8fb;
 }
 
 .chat-message {
@@ -704,7 +704,7 @@ button:focus-visible {
 .assistant-thinking,
 .assistant-error {
   color: var(--text-muted);
-  background: #f8fafc;
+  background: #f6f8fb;
 }
 
 .assistant-error {
@@ -721,6 +721,37 @@ button:focus-visible {
   margin: 0;
   padding: 0;
   list-style: none;
+}
+
+.thinking-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  color: var(--text);
+}
+
+.thinking-spinner {
+  color: var(--accent);
+  animation: thinking-spin 900ms linear infinite;
+}
+
+.thinking-progress {
+  position: relative;
+  height: 6px;
+  margin-bottom: 14px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #dbe3ef;
+}
+
+.thinking-progress span {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 42%;
+  border-radius: inherit;
+  background: #2563eb;
+  animation: thinking-progress 2000ms cubic-bezier(0.2, 0.8, 0.2, 1) infinite;
 }
 
 .thinking-list li {
@@ -748,7 +779,7 @@ button:focus-visible {
 .assistant-sections {
   display: grid;
   grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
-  gap: 14px;
+  gap: 16px;
 }
 
 .assistant-group {
@@ -756,8 +787,16 @@ button:focus-visible {
   gap: 10px;
 }
 
-.assistant-group h4 {
+.assistant-group h4,
+.assistant-group-title h4 {
   margin: 0;
+}
+
+.assistant-group-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #1e293b;
 }
 
 .assistant-meta {
@@ -765,6 +804,188 @@ button:focus-visible {
   gap: 8px;
   flex-wrap: wrap;
   align-items: center;
+}
+
+.assistant-verdict {
+  display: grid;
+  gap: 8px;
+  padding: 14px;
+  border: 1px solid #cbd8e8;
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.06);
+}
+
+.verdict-marker {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  gap: 7px;
+  padding: 5px 9px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.verdict-ready {
+  color: var(--green);
+  background: var(--green-soft);
+}
+
+.verdict-needs-evidence {
+  color: var(--yellow);
+  background: var(--yellow-soft);
+}
+
+.verdict-blocked {
+  color: var(--red);
+  background: var(--red-soft);
+}
+
+.assistant-status-strip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.assistant-status-count {
+  display: grid;
+  gap: 2px;
+  min-height: 68px;
+  padding: 12px;
+  border: 1px solid #d8e1ed;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.assistant-status-count span {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.assistant-status-count strong {
+  color: var(--text);
+  font-size: 1.35rem;
+}
+
+.status-verified {
+  border-left: 4px solid var(--green);
+}
+
+.status-assumption {
+  border-left: 4px solid var(--yellow);
+}
+
+.status-missing_evidence {
+  border-left: 4px solid #2563eb;
+}
+
+.status-contradicted {
+  border-left: 4px solid var(--red);
+}
+
+.assistant-claims {
+  align-content: start;
+}
+
+.assistant-claim-row {
+  padding: 14px;
+  border: 1px solid #d8e1ed;
+  border-left-width: 4px;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.assistant-claim-row.claim-verified {
+  border-left-color: var(--green);
+}
+
+.assistant-claim-row.claim-assumption {
+  border-left-color: var(--yellow);
+}
+
+.assistant-claim-row.claim-missing_evidence {
+  border-left-color: #2563eb;
+}
+
+.assistant-claim-row.claim-contradicted {
+  border-left-color: var(--red);
+}
+
+.assistant-side-grid {
+  display: grid;
+  gap: 12px;
+  align-content: start;
+}
+
+.assistant-evidence-card {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid #d8e1ed;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.assistant-evidence-list,
+.assistant-action-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.assistant-evidence-list li {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+  color: #1f3a2d;
+}
+
+.assistant-evidence-list svg {
+  margin-top: 2px;
+  color: var(--green);
+}
+
+.assistant-evidence-list.evidence-missing li {
+  color: #6b3c06;
+}
+
+.assistant-evidence-list.evidence-missing svg {
+  color: var(--yellow);
+}
+
+.assistant-action-list {
+  counter-reset: action;
+}
+
+.assistant-action-list li {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+}
+
+.assistant-action-list span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: #1d4ed8;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.assistant-action-list strong {
+  font-weight: 700;
 }
 
 @keyframes pulse-dot {
@@ -776,6 +997,24 @@ button:focus-visible {
   50% {
     opacity: 1;
     transform: scale(1);
+  }
+}
+
+@keyframes thinking-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes thinking-progress {
+  0% {
+    transform: translateX(-105%);
+  }
+  55% {
+    transform: translateX(75%);
+  }
+  100% {
+    transform: translateX(245%);
   }
 }
 
@@ -803,6 +1042,11 @@ button:focus-visible {
   .thinking-dot {
     animation: none;
   }
+
+  .thinking-spinner,
+  .thinking-progress span {
+    animation: none;
+  }
 }
 
 @media (max-width: 1200px) {
@@ -810,7 +1054,8 @@ button:focus-visible {
   .risk-grid,
   .filters-grid,
   .answer-grid,
-  .timeline-grid {
+  .timeline-grid,
+  .assistant-status-strip {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
@@ -864,7 +1109,8 @@ button:focus-visible {
   .risk-grid,
   .filters-grid,
   .answer-grid,
-  .timeline-grid {
+  .timeline-grid,
+  .assistant-status-strip {
     grid-template-columns: 1fr;
   }
 

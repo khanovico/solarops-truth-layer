@@ -12,7 +12,7 @@ import { formatCurrency, formatDate } from "../lib/format";
 import { useApi } from "../lib/api-context";
 import type { AiAnswer, ProjectDetail as ProjectDetailType } from "../lib/types";
 
-const ASSISTANT_THINKING_DELAY_MS = 650;
+const ASSISTANT_THINKING_DELAY_MS = 2000;
 const ASSISTANT_PROMPTS = [
   "Is this project ready for financing review?",
   "What is blocking this project?",
@@ -91,10 +91,10 @@ export function ProjectDetail() {
     setSubmittedQuestion(askedQuestion);
     setAssistantError(null);
     try {
+      const startedAt = window.performance.now();
       const result = await api.askProjectAi(id, askedQuestion);
-      if (result.warning) {
-        await wait(ASSISTANT_THINKING_DELAY_MS);
-      }
+      const elapsedMs = window.performance.now() - startedAt;
+      await wait(Math.max(0, ASSISTANT_THINKING_DELAY_MS - elapsedMs));
       const linkedEvidenceIds = new Set(
         result.data.claims.flatMap((claim) => claim.evidence_ids),
       );
