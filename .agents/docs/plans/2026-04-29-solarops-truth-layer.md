@@ -122,7 +122,7 @@ Interaction thesis:
 ## Progress Checklist
 
 - [x] T0 planning docs created.
-- [x] T0 committed (`0d57c48`).
+- [x] T0 committed (`d5c393c`).
 - [ ] T1 implemented, tested, documented, committed.
 - [ ] T2 implemented, tested, documented, committed.
 - [ ] T3 implemented, tested, documented, committed.

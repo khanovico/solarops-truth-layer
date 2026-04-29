@@ -4,7 +4,7 @@ Status values: `todo`, `in_progress`, `review`, `done`, `blocked`.
 
 | Ticket | Status | Scope | Verification | Commit |
 | --- | --- | --- | --- | --- |
-| T0 | done | Project management plan, ticket ledger, branch setup | Plan reviewed against PRD and requirements | 0d57c48 |
+| T0 | done | Project management plan, ticket ledger, branch setup | Plan reviewed against PRD and requirements | d5c393c |
 | T1 | todo | Foundation stack: repo structure, root Docker/Make/env, database schema/seed, service health endpoints | Service health tests; compose config sanity; first docs update | pending |
 | T2 | todo | Core project operations: Rust project queries, portfolio/list/detail endpoints, dashboard and detail browse UI | Rust endpoint tests; frontend component/query tests; build | pending |
 | T3 | todo | Evidence, claim, blocker, and activity layer | Deterministic rule tests; endpoint tests; frontend ledger/action tests | pending |
