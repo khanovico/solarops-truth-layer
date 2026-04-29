@@ -1,0 +1,4 @@
+interface:
+  display_name: "Review Changes"
+  short_description: "Review diffs with graph impact context"
+  default_prompt: "Use $review-changes to review this repository diff for risks and missing tests."

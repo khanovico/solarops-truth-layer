@@ -1,0 +1,11 @@
+---
+description: Playwright accessibility rules for automated a11y checks on critical frontend flows
+globs: **/*.{a11y,spec,test}.{ts,tsx,js,jsx}
+alwaysApply: false
+---
+
+# Shared rule reference
+
+Canonical rule content: `.agents/rules/testing/playwright-accessibility-rules.md`
+
+Use the shared rule file above as the source of truth. Keep this Cursor rule limited to discovery metadata plus this reference so the rule body is not duplicated per assistant.

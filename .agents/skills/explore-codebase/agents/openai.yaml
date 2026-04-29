@@ -1,0 +1,4 @@
+interface:
+  display_name: "Explore Codebase"
+  short_description: "Navigate repo structure with graph tools"
+  default_prompt: "Use $explore-codebase to map the relevant repository structure before changing code."

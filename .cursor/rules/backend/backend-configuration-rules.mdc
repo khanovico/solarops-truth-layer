@@ -1,0 +1,11 @@
+---
+description: Backend configuration rules for safe and predictable environment-driven settings
+globs: **/*.py
+alwaysApply: false
+---
+
+# Shared rule reference
+
+Canonical rule content: `.agents/rules/backend/backend-configuration-rules.md`
+
+Use the shared rule file above as the source of truth. Keep this Cursor rule limited to discovery metadata plus this reference so the rule body is not duplicated per assistant.

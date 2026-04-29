@@ -1,0 +1,4 @@
+interface:
+  display_name: "Debug Issue"
+  short_description: "Trace repo bugs with graph context"
+  default_prompt: "Use $debug-issue to investigate this repository issue with graph-guided debugging."

@@ -1,0 +1,11 @@
+---
+description: Jest unit testing rules for frontend TypeScript and JavaScript code quality
+globs: **/*.{test,spec}.{ts,tsx,js,jsx}
+alwaysApply: false
+---
+
+# Shared rule reference
+
+Canonical rule content: `.agents/rules/testing/jest-unit-testing-rules.md`
+
+Use the shared rule file above as the source of truth. Keep this Cursor rule limited to discovery metadata plus this reference so the rule body is not duplicated per assistant.

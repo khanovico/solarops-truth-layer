@@ -1,0 +1,7 @@
+interface:
+  display_name: "Core Fix Skill Docs"
+  short_description: "Internal skill documentation repair"
+  default_prompt: "Use $core-fix-skill-docs for explicit internal Rust skill documentation repair."
+
+policy:
+  allow_implicit_invocation: false

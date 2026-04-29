@@ -1,0 +1,4 @@
+interface:
+  display_name: "Refactor Safely"
+  short_description: "Plan refactors with dependency analysis"
+  default_prompt: "Use $refactor-safely to plan and execute this repository refactor."

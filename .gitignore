@@ -1,0 +1,25 @@
+.tmp/
+.env
+.agents/memory/
+app/node_modules/
+app/dist/
+apps/web/node_modules/
+apps/web/dist/
+apps/web/.vite/
+apps/web/test-results/
+apps/web/playwright-report/
+apps/ai-service/**/__pycache__/
+apps/ai-service/.pytest_cache/
+apps/ai-service/.venv/
+apps/api-rust/target/
+crm/__pycache__/
+crm/.pytest_cache/
+*.pyc
+app/.env
+crm/.env
+crm/.venv/
+app/test-results/
+app/playwright-report/
+.tmp/
+# Added by code-review-graph
+.code-review-graph/

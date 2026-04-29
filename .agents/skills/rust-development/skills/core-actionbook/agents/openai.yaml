@@ -1,0 +1,7 @@
+interface:
+  display_name: "Core Actionbook"
+  short_description: "Internal actionbook selector helper"
+  default_prompt: "Use $core-actionbook for explicit internal actionbook selector lookup."
+
+policy:
+  allow_implicit_invocation: false

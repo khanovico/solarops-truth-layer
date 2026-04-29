@@ -1,0 +1,4 @@
+interface:
+  display_name: "Frontend Skill"
+  short_description: "Premium frontend art direction"
+  default_prompt: "Use $frontend-skill to design or build a visually strong landing page, website, app, prototype, demo, or game UI."

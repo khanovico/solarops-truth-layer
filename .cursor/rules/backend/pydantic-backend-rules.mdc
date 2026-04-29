@@ -1,0 +1,11 @@
+---
+description: Pydantic model rules for robust validation and stable API contracts
+globs: **/*.py
+alwaysApply: false
+---
+
+# Shared rule reference
+
+Canonical rule content: `.agents/rules/backend/pydantic-backend-rules.md`
+
+Use the shared rule file above as the source of truth. Keep this Cursor rule limited to discovery metadata plus this reference so the rule body is not duplicated per assistant.

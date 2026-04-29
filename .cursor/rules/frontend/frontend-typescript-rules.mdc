@@ -1,0 +1,11 @@
+---
+description: TypeScript frontend rules for safer React code and maintainable UI contracts
+globs: **/*.{ts,tsx}
+alwaysApply: false
+---
+
+# Shared rule reference
+
+Canonical rule content: `.agents/rules/frontend/frontend-typescript-rules.md`
+
+Use the shared rule file above as the source of truth. Keep this Cursor rule limited to discovery metadata plus this reference so the rule body is not duplicated per assistant.

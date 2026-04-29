@@ -1,0 +1,7 @@
+interface:
+  display_name: "Core Dynamic Skills"
+  short_description: "Internal dynamic skill manager"
+  default_prompt: "Use $core-dynamic-skills for explicit internal Rust skill sync tasks."
+
+policy:
+  allow_implicit_invocation: false

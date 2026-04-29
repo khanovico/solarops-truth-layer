@@ -1,0 +1,11 @@
+---
+description: Playwright E2E rules for stable critical-flow frontend testing
+globs: **/*.{e2e,spec,test}.{ts,tsx,js,jsx}
+alwaysApply: false
+---
+
+# Shared rule reference
+
+Canonical rule content: `.agents/rules/testing/playwright-e2e-rules.md`
+
+Use the shared rule file above as the source of truth. Keep this Cursor rule limited to discovery metadata plus this reference so the rule body is not duplicated per assistant.

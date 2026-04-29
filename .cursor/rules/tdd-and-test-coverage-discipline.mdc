@@ -1,0 +1,10 @@
+---
+description: TDD-first discipline requiring sufficient tests for new code and features
+alwaysApply: true
+---
+
+# Shared rule reference
+
+Canonical rule content: `.agents/rules/tdd-and-test-coverage-discipline.md`
+
+Use the shared rule file above as the source of truth. Keep this Cursor rule limited to discovery metadata plus this reference so the rule body is not duplicated per assistant.

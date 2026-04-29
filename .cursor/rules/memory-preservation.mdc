@@ -1,0 +1,10 @@
+---
+description: Memory-first workflow for cross-session and cross-agent continuity
+alwaysApply: true
+---
+
+# Shared rule reference
+
+Canonical rule content: `.agents/rules/memory-preservation.md`
+
+Use the shared rule file above as the source of truth. Keep this Cursor rule limited to discovery metadata plus this reference so the rule body is not duplicated per assistant.

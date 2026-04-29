@@ -1,0 +1,7 @@
+interface:
+  display_name: "Core Agent Browser"
+  short_description: "Internal browser automation helper"
+  default_prompt: "Use $core-agent-browser for explicit internal browser automation tasks."
+
+policy:
+  allow_implicit_invocation: false
