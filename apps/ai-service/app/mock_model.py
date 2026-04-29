@@ -64,18 +64,21 @@ def evaluate_financing_readiness(project: ProjectContext) -> AiAnswer:
         confidence = 0.35
         reasoning = "Critical financing fields or evidence missing."
 
+    financing_claim_status = "verified" if financing_evidence else "missing_evidence"
+    financing_missing = [] if financing_evidence else ["ppa_term_sheet_or_financing_document"]
     rebate_claim_status = "verified" if rebate_award else "missing_evidence"
     rebate_missing = [] if rebate_award else ["rebate_award_letter"]
+    readiness_evidence = financing_evidence + rebate_award if status == "verified" else []
 
     claims = [
         claim(
-            claim_text="Project readiness for financing review.",
-            claim_type="readiness",
-            status=status,
-            confidence=confidence,
-            evidence_ids=financing_evidence if status == "verified" else [],
-            missing_evidence=missing,
-            reasoning_summary=reasoning,
+            claim_text="PPA or financing term sheet is secured.",
+            claim_type="financial",
+            status=financing_claim_status,
+            confidence=0.9 if financing_evidence else 0.25,
+            evidence_ids=financing_evidence,
+            missing_evidence=financing_missing,
+            reasoning_summary="Financing documentation requires PPA term sheet or financing document evidence.",
         ),
         claim(
             claim_text="Rebate is secured.",
@@ -86,13 +89,38 @@ def evaluate_financing_readiness(project: ProjectContext) -> AiAnswer:
             missing_evidence=rebate_missing,
             reasoning_summary="Rebate secured requires rebate award letter evidence.",
         ),
+        claim(
+            claim_text="Project readiness for financing review.",
+            claim_type="readiness",
+            status=status,
+            confidence=confidence,
+            evidence_ids=readiness_evidence,
+            missing_evidence=missing,
+            reasoning_summary=reasoning,
+        ),
     ]
-    actions = [
-        "Upload rebate award letter evidence.",
-        "Upload signed term sheet or financing document.",
-    ]
+    actions = []
     if has_high_blocker:
-        actions.insert(0, "Resolve open high-severity blocker before approval.")
+        actions.append("Resolve open high-severity blocker before approval.")
+    if data_conflict:
+        actions.append("Resolve open data conflict before approval.")
+    other_missing = [
+        item
+        for item in missing
+        if item not in {"rebate_award_letter", "ppa_term_sheet_or_financing_document"}
+    ]
+    if other_missing:
+        actions.append("Complete missing financing fields before approval.")
+    if not rebate_award:
+        actions.append("Upload rebate award letter evidence.")
+    if not financing_evidence:
+        actions.append("Upload signed term sheet or financing document.")
+    if not actions:
+        actions.append(
+            "Proceed with financing review package."
+            if status == "verified"
+            else "Resolve financing readiness gaps before approval."
+        )
     answer = AiAnswer(
         answer_markdown="Financing readiness evaluated with deterministic policy checks.",
         overall_confidence=max(c.confidence for c in claims),

@@ -33,9 +33,61 @@ def test_mock_financing_answer_marks_missing_rebate_evidence() -> None:
     body = resp.json()
     readiness_claim = next(claim for claim in body["claims"] if claim["claim_type"] == "readiness")
     assert readiness_claim["status"] != "verified"
+    term_sheet_claim = next(
+        claim for claim in body["claims"] if claim["claim_text"] == "PPA or financing term sheet is secured."
+    )
+    assert term_sheet_claim["status"] == "missing_evidence"
+    assert "ppa_term_sheet_or_financing_document" in term_sheet_claim["missing_evidence"]
     rebate_claim = next(claim for claim in body["claims"] if claim["claim_type"] == "rebate")
     assert rebate_claim["status"] == "missing_evidence"
     assert "rebate_award_letter" in rebate_claim["missing_evidence"]
+    assert "Upload rebate award letter evidence." in body["recommended_next_actions"]
+    assert "Upload signed term sheet or financing document." in body["recommended_next_actions"]
+
+
+def test_mock_financing_answer_verifies_term_sheet_without_redundant_action() -> None:
+    project = _base_project()
+    project["evidence"] = [{"id": "term-sheet-1", "type": "ppa_term_sheet", "status": "approved"}]
+    payload = {"project": project, "question": "Is this project ready for financing review?"}
+    resp = client.post("/ask", json=payload)
+    assert resp.status_code == 200
+    body = resp.json()
+    term_sheet_claim = next(
+        claim for claim in body["claims"] if claim["claim_text"] == "PPA or financing term sheet is secured."
+    )
+    assert term_sheet_claim["status"] == "verified"
+    assert term_sheet_claim["evidence_ids"] == ["term-sheet-1"]
+    rebate_claim = next(claim for claim in body["claims"] if claim["claim_type"] == "rebate")
+    assert rebate_claim["status"] == "missing_evidence"
+    readiness_claim = next(claim for claim in body["claims"] if claim["claim_type"] == "readiness")
+    assert readiness_claim["status"] == "missing_evidence"
+    assert "Upload rebate award letter evidence." in body["recommended_next_actions"]
+    assert "Upload signed term sheet or financing document." not in body["recommended_next_actions"]
+
+
+def test_mock_financing_answer_verifies_rebate_and_readiness_after_award() -> None:
+    project = _base_project()
+    project["evidence"] = [
+        {"id": "term-sheet-1", "type": "ppa_term_sheet", "status": "approved"},
+        {"id": "rebate-award-1", "type": "rebate_award_letter", "status": "approved"},
+    ]
+    payload = {"project": project, "question": "Is this project ready for financing review?"}
+    resp = client.post("/ask", json=payload)
+    assert resp.status_code == 200
+    body = resp.json()
+    term_sheet_claim = next(
+        claim for claim in body["claims"] if claim["claim_text"] == "PPA or financing term sheet is secured."
+    )
+    assert term_sheet_claim["status"] == "verified"
+    assert term_sheet_claim["evidence_ids"] == ["term-sheet-1"]
+    rebate_claim = next(claim for claim in body["claims"] if claim["claim_type"] == "rebate")
+    assert rebate_claim["status"] == "verified"
+    assert rebate_claim["evidence_ids"] == ["rebate-award-1"]
+    readiness_claim = next(claim for claim in body["claims"] if claim["claim_type"] == "readiness")
+    assert readiness_claim["status"] == "verified"
+    assert sorted(readiness_claim["evidence_ids"]) == ["rebate-award-1", "term-sheet-1"]
+    assert "Upload rebate award letter evidence." not in body["recommended_next_actions"]
+    assert "Upload signed term sheet or financing document." not in body["recommended_next_actions"]
 
 
 def test_verified_claim_requires_evidence_ids() -> None:
