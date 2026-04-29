@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use chrono::NaiveDate;
 use serde_json::json;
 use sqlx::{PgPool, Postgres, Transaction};
 use uuid::Uuid;
@@ -330,6 +331,14 @@ pub async fn create_evidence(
         &request.uploaded_by,
         &format!("Evidence added: {}", request.title),
         json!({ "evidence_id": evidence_id, "evidence_type": request.evidence_type }),
+    )
+    .await?;
+    automate_rebate_award_letter(
+        pool,
+        project_id,
+        &request.evidence_type,
+        request.effective_date,
+        &request.uploaded_by,
     )
     .await?;
     recompute_project_health(pool, project_id).await?;
@@ -958,6 +967,106 @@ async fn update_reverified_claim(
     Ok(())
 }
 
+async fn automate_rebate_award_letter(
+    pool: &PgPool,
+    project_id: Uuid,
+    evidence_type: &str,
+    effective_date: Option<NaiveDate>,
+    actor: &str,
+) -> AppResult<()> {
+    if evidence_type != "rebate_award_letter" {
+        return Ok(());
+    }
+
+    let resolved_blockers = sqlx::query_as::<_, Blocker>(
+        r#"
+        update blockers
+        set status = 'resolved',
+            resolved_at = now()
+        where project_id = $1
+          and status = 'open'
+          and category = 'missing_document'
+          and (
+            lower(title) like '%rebate_award_letter%'
+            or lower(description) like '%rebate_award_letter%'
+            or (
+              (lower(title) like '%rebate%' or lower(description) like '%rebate%')
+              and (lower(title) like '%award letter%' or lower(description) like '%award letter%')
+            )
+          )
+        returning id, project_id, category, severity, title, description, owner_name, status, created_at, resolved_at
+        "#,
+    )
+    .bind(project_id)
+    .fetch_all(pool)
+    .await?;
+
+    for blocker in resolved_blockers {
+        write_activity(
+            pool,
+            project_id,
+            "blocker_resolved",
+            actor,
+            &format!(
+                "Blocker '{}' automatically resolved by rebate award letter upload.",
+                blocker.title
+            ),
+            json!({
+                "blocker_id": blocker.id,
+                "status": blocker.status,
+                "automation": "rebate_award_letter"
+            }),
+        )
+        .await?;
+    }
+
+    let completed_milestones = sqlx::query_as::<_, (Uuid, String)>(
+        r#"
+        update project_milestones
+        set status = 'complete',
+            actual_date = coalesce(actual_date, $2, current_date),
+            updated_at = now()
+        where project_id = $1
+          and milestone_type = 'rebate_award_received'
+          and status <> 'complete'
+        returning id, milestone_type
+        "#,
+    )
+    .bind(project_id)
+    .bind(effective_date)
+    .fetch_all(pool)
+    .await?;
+
+    for (milestone_id, milestone_type) in completed_milestones {
+        write_activity(
+            pool,
+            project_id,
+            "milestone_completed",
+            actor,
+            "Milestone 'rebate_award_received' automatically completed by rebate award letter upload.",
+            json!({
+                "milestone_id": milestone_id,
+                "milestone_type": milestone_type,
+                "status": "complete",
+                "automation": "rebate_award_letter"
+            }),
+        )
+        .await?;
+    }
+
+    Ok(())
+}
+
+fn matches_rebate_award_letter_blocker(category: &str, title: &str, description: &str) -> bool {
+    if category != "missing_document" {
+        return false;
+    }
+
+    let text = format!("{title} {description}").to_lowercase();
+    text.contains("rebate_award_letter")
+        || (text.contains("rebate") && text.contains("award letter"))
+}
+
 async fn recompute_project_health(pool: &PgPool, project_id: Uuid) -> AppResult<()> {
     let project = project_record(pool, project_id).await?;
     let evidence_types: Vec<String> = evidence_pairs(pool, project_id)
@@ -1003,4 +1112,36 @@ async fn write_activity(
     .execute(pool)
     .await?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::matches_rebate_award_letter_blocker;
+
+    #[test]
+    fn rebate_award_matcher_accepts_seed_missing_document_blocker() {
+        assert!(matches_rebate_award_letter_blocker(
+            "missing_document",
+            "Rebate award letter missing",
+            "Financing review cannot treat the rebate as secured until the award letter is uploaded.",
+        ));
+    }
+
+    #[test]
+    fn rebate_award_matcher_rejects_unrelated_missing_document_blocker() {
+        assert!(!matches_rebate_award_letter_blocker(
+            "missing_document",
+            "Interconnection package not submitted",
+            "The interconnection package is needed before installation readiness can be verified.",
+        ));
+    }
+
+    #[test]
+    fn rebate_award_matcher_rejects_non_document_risk_blocker() {
+        assert!(!matches_rebate_award_letter_blocker(
+            "rebate_risk",
+            "Rebate award letter disputed",
+            "The award letter exists but conflicts with underwriting terms.",
+        ));
+    }
 }
