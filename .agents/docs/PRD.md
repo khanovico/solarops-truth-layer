@@ -141,3 +141,9 @@
   - No auth or real external integrations in v1.
   - Implementation should use the required repo structure from requirements.
   - .agents/docs/PROJECT_STRUCTURE.md should be filled after or alongside scaffold creation.
+
+  ## Execution Tracking
+
+  Active ticket ledger: `.agents/docs/TICKET_LEDGER.md`.
+
+  Active implementation plan: `.agents/docs/plans/2026-04-29-solarops-truth-layer.md`.
